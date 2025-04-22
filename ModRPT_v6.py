@@ -1792,7 +1792,7 @@ if uploaded_file is not None:
 
             # Add this after your AVO modeling section
             if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-            st.header("Seismic Wedge Modeling")
+               st.header("Seismic Wedge Modeling")
     
             # Use rock physics results as default values
     default_vp = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VP_FRMMIX'].values.mean()
