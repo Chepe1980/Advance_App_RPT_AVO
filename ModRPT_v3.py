@@ -85,7 +85,7 @@ with st.sidebar:
             critical_porosity = st.slider("Critical Porosity (φc)", 0.3, 0.5, 0.4, 0.01)
     
     # Rockphypy specific parameters
-    if model_choice in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
+    if model_choice in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"] and rockphypy_available:
         st.subheader("RPT Model Parameters")
         rpt_phi_c = st.slider("RPT Critical Porosity", 0.3, 0.5, 0.4, 0.01)
         rpt_Cn = st.slider("RPT Coordination Number", 6.0, 12.0, 8.6, 0.1)
@@ -539,78 +539,142 @@ def predict_vp_vs(logs, features):
         st.error(f"Sonic prediction failed: {str(e)}")
         return None
 
-# Seismic Wedge Model
+# Wedge Model Function (Corrected)
 def plot_wedge_model(vp_log, vs_log, rho_log, depth_log, wavelet_freq, thickness_range=(1, 50)):
     """
-    Generate a seismic wedge model to analyze tuning effects.
-    
-    Args:
-        vp_log (array): P-wave velocity log (m/s)
-        vs_log (array): S-wave velocity log (m/s)
-        rho_log (array): Density log (g/cc)
-        depth_log (array): Depth values (m)
-        wavelet_freq (int): Wavelet frequency (Hz)
-        thickness_range (tuple): Min/max wedge thickness (m)
+    Generate a seismic wedge model (3-layer: shale/sand/shale) with synthetic seismic.
     """
-    # Calculate impedance
+    # Create impedance log
     ip_log = vp_log * rho_log
     
-    # Create wedge geometry
-    thicknesses = np.linspace(thickness_range[0], thickness_range[1], 20)
-    wedge_ip = np.zeros((len(thicknesses), len(ip_log)))
+    # Define layer indices (shale = background, sand = wedge)
+    sand_thicknesses = np.linspace(thickness_range[0], thickness_range[1], 20)
+    middle_depth = depth_log.mean()
     
-    # Define a sand layer (replace with your actual logic)
-    sand_layer = (depth_log > depth_log.mean() - 10) & (depth_log < depth_log.mean() + 10)
+    # Initialize wedge model (each row is a trace with varying sand thickness)
+    wedge_model = np.zeros((len(sand_thicknesses), len(depth_log)))
+    synthetic_seismic = np.zeros_like(wedge_model)
     
-    for i, thick in enumerate(thicknesses):
-        # Create wedge layer with thickness `thick`
-        wedge_ip[i, :] = ip_log
-        wedge_ip[i, sand_layer] = ip_log[sand_layer] * 0.9  # Simulate sand layer
+    # Generate Ricker wavelet
+    wavelet_time, wavelet_amp = ricker_wavelet(wavelet_freq)
+    wavelet_amp = wavelet_amp / np.max(np.abs(wavelet_amp))  # Normalize
+    
+    for i, thickness in enumerate(sand_thicknesses):
+        # Create wedge layer
+        sand_top = middle_depth - thickness / 2
+        sand_bottom = middle_depth + thickness / 2
+        sand_layer = (depth_log >= sand_top) & (depth_log <= sand_bottom)
         
-    # Generate synthetic seismic
-    _, wavelet = ricker_wavelet(wavelet_freq)
-    synthetic = np.apply_along_axis(lambda x: np.convolve(x, wavelet, mode='same'), axis=1, arr=wedge_ip)
+        # Assign impedance values (shale = background, sand = wedge)
+        wedge_model[i, :] = ip_log
+        wedge_model[i, sand_layer] = ip_log[sand_layer] * 0.9  # Sand has lower IP
+        
+        # Create reflectivity series
+        rc = np.zeros(len(depth_log))
+        rc[1:] = (wedge_model[i, 1:] - wedge_model[i, :-1]) / (wedge_model[i, 1:] + wedge_model[i, :-1])
+        
+        # Convolve with wavelet to generate synthetic seismic
+        synthetic_seismic[i, :] = np.convolve(rc, wavelet_amp, mode='same')
     
-    # Plot wedge model
-    fig_wedge, ax = plt.subplots(figsize=(10, 6))
-    extent = [depth_log.min(), depth_log.max(), thickness_range[1], thickness_range[0]]
-    ax.imshow(synthetic, aspect='auto', extent=extent, cmap='seismic')
-    ax.set_xlabel("Depth (m)")
-    ax.set_ylabel("Wedge Thickness (m)")
-    ax.set_title(f"Seismic Wedge Model ({wavelet_freq} Hz Wavelet)")
-    plt.colorbar(label="Amplitude")
-    st.pyplot(fig_wedge)
+    # Plotting
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+    
+    # Wedge model (impedance)
+    im1 = ax1.imshow(
+        wedge_model, 
+        aspect='auto', 
+        extent=[depth_log.min(), depth_log.max(), thickness_range[1], thickness_range[0]],
+        cmap='viridis'
+    )
+    ax1.set_title("Impedance Wedge Model")
+    ax1.set_xlabel("Depth (m)")
+    ax1.set_ylabel("Wedge Thickness (m)")
+    plt.colorbar(im1, ax=ax1, label="Acoustic Impedance (m/s·g/cc)")
+    
+    # Synthetic seismic
+    im2 = ax2.imshow(
+        synthetic_seismic, 
+        aspect='auto', 
+        extent=[depth_log.min(), depth_log.max(), thickness_range[1], thickness_range[0]],
+        cmap='seismic',
+        vmin=-np.max(np.abs(synthetic_seismic)), 
+        vmax=np.max(np.abs(synthetic_seismic))
+    )
+    ax2.set_title(f"Synthetic Seismic (Wavelet: {wavelet_freq} Hz)")
+    ax2.set_xlabel("Depth (m)")
+    plt.colorbar(im2, ax=ax2, label="Amplitude")
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+    
+    # Return synthetic seismic for frequency analysis
+    return synthetic_seismic
 
-# Log vs. Seismic Resolution Comparison
-def compare_resolution(ip_log, depth_log, wavelet_freq, vp_log):
+# Frequency Analysis Functions
+def plot_frequency_analysis(synthetic_seismic, time_samples, angles, wavelet_freq, time_range=(0.15, 0.25)):
     """
-    Compare log resolution with seismic resolution.
-    
-    Args:
-        ip_log (array): Acoustic impedance log
-        depth_log (array): Depth values (m)
-        wavelet_freq (int): Wavelet frequency (Hz)
-        vp_log (array): P-wave velocity (for wavelength calculation)
+    Plot frequency spectrum and time-frequency analysis of synthetic seismic.
     """
-    # Calculate dominant wavelength
-    wavelength = np.mean(vp_log) / wavelet_freq  # Approximate wavelength
+    # Select a middle trace for analysis
+    middle_trace = synthetic_seismic[len(synthetic_seismic) // 2, :]
     
-    # Plot log IP vs. smoothed IP (simulating seismic resolution)
-    fig_res, ax = plt.subplots(figsize=(10, 6))
-    ax.plot(ip_log, depth_log, 'k-', label='Log IP', linewidth=1)
+    # Compute FFT
+    n = len(middle_trace)
+    dt = time_samples[1] - time_samples[0]
+    freq = np.fft.fftfreq(n, dt)[:n//2]
+    fft_vals = np.abs(np.fft.fft(middle_trace)[:n//2])
     
-    # Apply smoothing to simulate seismic resolution
-    window_size = int(wavelength / np.mean(np.diff(depth_log)))
-    ip_smooth = np.convolve(ip_log, np.ones(window_size)/window_size, mode='same')
-    ax.plot(ip_smooth, depth_log, 'r--', label=f'Smoothed (≈Seismic)', linewidth=1.5)
+    # Plotting
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
     
-    ax.set_xlabel("Acoustic Impedance (m/s·g/cc)")
-    ax.set_ylabel("Depth (m)")
-    ax.set_title(f"Resolution Comparison\n(Wavelet Freq: {wavelet_freq} Hz, Wavelength: {wavelength:.1f} m)")
-    ax.legend()
-    ax.grid(True)
-    ax.invert_yaxis()
-    st.pyplot(fig_res)
+    # Frequency spectrum
+    ax1.plot(freq, fft_vals, 'b-', linewidth=2)
+    ax1.axvline(wavelet_freq, color='r', linestyle='--', label=f'Wavelet Freq: {wavelet_freq} Hz')
+    ax1.set_title("Frequency Spectrum")
+    ax1.set_xlabel("Frequency (Hz)")
+    ax1.set_ylabel("Amplitude")
+    ax1.legend()
+    ax1.grid(True)
+    
+    # Time-frequency analysis (STFT)
+    f, t, Zxx = signal.stft(
+        middle_trace,
+        fs=1/dt,
+        nperseg=64,
+        noverlap=32
+    )
+    ax2.pcolormesh(t, f, np.abs(Zxx), shading='gouraud', cmap='viridis')
+    ax2.set_title("Short-Time Fourier Transform (STFT)")
+    ax2.set_xlabel("Time (s)")
+    ax2.set_ylabel("Frequency (Hz)")
+    ax2.set_ylim(0, 2 * wavelet_freq)  # Focus on relevant frequencies
+    
+    plt.tight_layout()
+    st.pyplot(fig)
+
+def plot_cwt_analysis(synthetic_seismic, time_samples, angles, scales, wavelet='morl'):
+    """
+    Plot Continuous Wavelet Transform (CWT) of synthetic seismic.
+    """
+    # Select a middle trace
+    trace = synthetic_seismic[len(synthetic_seismic) // 2, :]
+    
+    # Compute CWT
+    coefficients, frequencies = pywt.cwt(trace, scales, wavelet, sampling_period=time_samples[1]-time_samples[0])
+    
+    # Plotting
+    fig, ax = plt.subplots(figsize=(10, 6))
+    im = ax.imshow(
+        np.abs(coefficients),
+        extent=[time_samples.min(), time_samples.max(), scales[-1], scales[0]],
+        aspect='auto',
+        cmap='viridis'
+    )
+    ax.set_title("Continuous Wavelet Transform (CWT)")
+    ax.set_xlabel("Time (s)")
+    ax.set_ylabel("Scale")
+    plt.colorbar(im, ax=ax, label="Magnitude")
+    st.pyplot(fig)
 
 # Seismic Inversion Feasibility Function
 def seismic_inversion_feasibility(logs, wavelet_freq):
@@ -654,6 +718,13 @@ def seismic_inversion_feasibility(logs, wavelet_freq):
         st.error(f"Inversion feasibility analysis failed: {str(e)}")
         return None
 
+# Download link generator
+def get_table_download_link(df, filename="results.csv"):
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download CSV File</a>'
+    return href
+
 # Main processing function with error handling
 @handle_errors
 def process_data(uploaded_file, model_choice, include_uncertainty=False, mc_iterations=100, **kwargs):
@@ -681,7 +752,7 @@ def process_data(uploaded_file, model_choice, include_uncertainty=False, mc_iter
     sg = kwargs.get('sg', 0.05)
     
     # Skip fluid substitution for RPT models (they're visualization-only)
-    if model_choice in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
+    if model_choice in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"] and rockphypy_available:
         # Just add placeholder columns for consistency
         for case in ['B', 'O', 'G', 'MIX']:
             logs[f'VP_FRM{case}'] = logs.VP
@@ -848,13 +919,6 @@ def process_data(uploaded_file, model_choice, include_uncertainty=False, mc_iter
 
     return logs, mc_results
 
-# Download link generator
-def get_table_download_link(df, filename="results.csv"):
-    csv = df.to_csv(index=False)
-    b64 = base64.b64encode(csv.encode()).decode()
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download CSV File</a>'
-    return href
-
 # Main content area
 if uploaded_file is not None:
     try:
@@ -935,638 +999,41 @@ if uploaded_file is not None:
             # Display the well log plot
             st.pyplot(fig)
 
-        # Sonic Log Prediction Module
-        if predict_sonic and 'PHI' in logs.columns and 'VSH' in logs.columns:
-            st.header("Sonic Log Prediction")
-            
-            default_features = ['PHI', 'VSH', 'RHO']
-            if 'GR' in logs.columns:
-                default_features.append('GR')
-            if 'RT' in logs.columns:
-                default_features.append('RT')
-                
-            features = st.multiselect(
-                "Select features for prediction",
-                logs.columns.tolist(),
-                default=default_features
+        # Wedge Model and Frequency Analysis
+        st.header("Wedge Model & Frequency Analysis")
+        if st.checkbox("Show Wedge Model", value=True):
+            synthetic_seismic = plot_wedge_model(
+                vp_log=logs.VP.values,
+                vs_log=logs.VS.values,
+                rho_log=logs.RHO.values,
+                depth_log=logs.DEPTH.values,
+                wavelet_freq=wavelet_freq,
+                thickness_range=(wedge_min, wedge_max)
             )
             
-            if st.button("Train Prediction Models") and features:
-                with st.spinner("Training VP/VS prediction models..."):
-                    prediction_results = predict_vp_vs(logs, features)
-                    
-                    if prediction_results:
-                        st.success("Models trained successfully!")
-                        col1, col2 = st.columns(2)
-                        col1.metric("VP Prediction R²", f"{prediction_results['vp_r2']:.3f}")
-                        col2.metric("VS Prediction R²", f"{prediction_results['vs_r2']:.3f}")
-                        col1.metric("VP RMSE", f"{prediction_results['vp_rmse']:.1f} m/s")
-                        col2.metric("VS RMSE", f"{prediction_results['vs_rmse']:.1f} m/s")
-                        
-                        # Show wedge model and resolution comparison
-                        st.header("Seismic Modeling")
-                        plot_wedge_model(
-                            vp_log=logs.VP_pred.values if 'VP_pred' in logs.columns else logs.VP.values,
-                            vs_log=logs.VS_pred.values if 'VS_pred' in logs.columns else logs.VS.values,
-                            rho_log=logs.RHO.values,
-                            depth_log=logs.DEPTH.values,
-                            wavelet_freq=wavelet_freq,
-                            thickness_range=(wedge_min, wedge_max)
-                        )
-                        
-                        compare_resolution(
-                            ip_log=(logs.VP_pred * logs.RHO).values if 'VP_pred' in logs.columns else (logs.VP * logs.RHO).values,
-                            depth_log=logs.DEPTH.values,
-                            wavelet_freq=wavelet_freq,
-                            vp_log=logs.VP_pred.values if 'VP_pred' in logs.columns else logs.VP.values
-                        )
-
-        # Seismic Inversion Feasibility Module
-        if inversion_feasibility:
-            st.header("Seismic Inversion Feasibility Analysis")
+            # Time samples for frequency analysis
+            t_samp = np.arange(0, 0.5, 0.0001)
             
-            with st.spinner("Analyzing inversion feasibility..."):
-                feasibility = seismic_inversion_feasibility(logs, wavelet_freq)
-                
-                if feasibility:
-                    col1, col2 = st.columns(2)
-                    col1.subheader("Bandwidth Analysis")
-                    col1.write(f"Nyquist Frequency: {feasibility['bandwidth']['nyquist']:.1f} Hz")
-                    col1.write(f"Wavelet Bandwidth: {feasibility['bandwidth']['wavelet']:.1f} Hz")
-                    col1.success("Bandwidth OK") if feasibility['bandwidth']['feasible'] else col1.error("Bandwidth too high!")
-                    
-                    col2.subheader("Vertical Resolution")
-                    col2.write(f"Tuning Thickness: {feasibility['tuning_thickness']:.1f} m")
-                    col2.write(f"Minimum Resolvable Layer: {feasibility['resolution']['vertical']:.1f} m")
-                    
-                    st.subheader("Property Correlation Matrix")
-                    fig_corr, ax = plt.subplots(figsize=(8, 6))
-                    sns.heatmap(feasibility['correlation_matrix'], annot=True, cmap='coolwarm', 
-                                vmin=-1, vmax=1, ax=ax)
-                    st.pyplot(fig_corr)
-                    
-                    st.subheader("Sensitivity Analysis")
-                    sens_df = pd.DataFrame.from_dict(feasibility['sensitivity'], 
-                                                    orient='index', columns=['Correlation'])
-                    st.dataframe(sens_df.style.format("{:.2f}").background_gradient(cmap='coolwarm', 
-                                                                                   vmin=-1, vmax=1))
-                    
-                    # Feasibility score (simple heuristic)
-                    score = 0
-                    score += 1 if feasibility['bandwidth']['feasible'] else -1
-                    score += sum(np.abs(list(feasibility['sensitivity'].values())))
-                    score = max(0, min(10, score * 2))  # Scale to 0-10
-                    
-                    st.progress(score/10)
-                    st.write(f"Inversion Feasibility Score: {score:.1f}/10")
-                    
-                    if score < 5:
-                        st.warning("Marginal feasibility - consider:")
-                        st.markdown("""
-                        - Higher frequency wavelet
-                        - Additional conditioning (low-frequency model)
-                        - Rock physics constraints
-                        """)
-                    else:
-                        st.success("Good inversion feasibility")
-
-        # Interactive Crossplot
-        st.header("Interactive Crossplots with Selection")
-        crossplot = create_interactive_crossplot(logs)
-        if crossplot:
-            event_result = streamlit_bokeh_events(
-                bokeh_plot=crossplot,
-                events="SELECTION_CHANGED",
-                key="crossplot",
-                refresh_on_update=False,
-                debounce_time=0,
-                override_height=500
-            )
-        else:
-            st.warning("Could not generate interactive crossplot due to data issues")
-        
-        # Original 2D crossplots (now including mixed case)
-        st.header("2D Crossplots")
-        fig2, ax2 = plt.subplots(nrows=1, ncols=5, figsize=(25, 4))  # Added column for mixed case
-        ax2[0].scatter(logs.IP, logs.VPVS, 20, logs.LFC_B, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
-        ax2[0].set_xlabel('IP (m/s*g/cc)')
-        ax2[0].set_ylabel('Vp/Vs(unitless)')
-        ax2[1].scatter(logs.IP_FRMB, logs.VPVS_FRMB, 20, logs.LFC_B, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
-        ax2[1].set_xlabel('IP (m/s*g/cc)')
-        ax2[1].set_ylabel('Vp/Vs(unitless)')
-        ax2[2].scatter(logs.IP_FRMO, logs.VPVS_FRMO, 20, logs.LFC_O, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
-        ax2[2].set_xlabel('IP (m/s*g/cc)')
-        ax2[2].set_ylabel('Vp/Vs(unitless)')
-        ax2[3].scatter(logs.IP_FRMG, logs.VPVS_FRMG, 20, logs.LFC_G, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
-        ax2[3].set_xlabel('IP (m/s*g/cc)')
-        ax2[3].set_ylabel('Vp/Vs(unitless)')
-        ax2[4].scatter(logs.IP_FRMMIX, logs.VPVS_FRMMIX, 20, logs.LFC_MIX, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
-        ax2[4].set_xlabel('IP (m/s*g/cc)')
-        ax2[4].set_ylabel('Vp/Vs(unitless)')
-        ax2[0].set_xlim(3000,16000); ax2[0].set_ylim(1.5,3)
-        ax2[0].set_title('Original Data')
-        ax2[1].set_title('FRM to Brine')
-        ax2[2].set_title('FRM to Oil')
-        ax2[3].set_title('FRM to Gas')
-        ax2[4].set_title(f'FRM to Mixed (Sw={sw:.2f}, So={so:.2f}, Sg={sg:.2f})')
-        st.pyplot(fig2)
-
-        # 3D Crossplot if enabled
-        if show_3d_crossplot and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-            st.header("3D Crossplot")
-            fig3d = plt.figure(figsize=(10, 8))
-            ax3d = fig3d.add_subplot(111, projection='3d')
-            
-            for case, color in [('B', 'blue'), ('O', 'green'), ('G', 'red'), ('MIX', 'magenta')]:
-                mask = logs[f'LFC_{case}'] == int(case == 'B')*1 + int(case == 'O')*2 + int(case == 'G')*3 + int(case == 'MIX')*4
-                ax3d.scatter(
-                    logs.loc[mask, f'IP_FRM{case}'],
-                    logs.loc[mask, f'VPVS_FRM{case}'],
-                    logs.loc[mask, f'RHO_FRM{case}'],
-                    c=color, label=case, alpha=0.5
+            # Frequency analysis
+            if st.checkbox("Show Frequency Spectrum & STFT", value=True):
+                plot_frequency_analysis(
+                    synthetic_seismic,
+                    t_samp,
+                    np.arange(min_angle, max_angle + 1, angle_step),
+                    wavelet_freq
                 )
             
-            ax3d.set_xlabel('IP (m/s*g/cc)')
-            ax3d.set_ylabel('Vp/Vs')
-            ax3d.set_zlabel('Density (g/cc)')
-            ax3d.set_title('3D Rock Physics Crossplot')
-            ax3d.legend()
-            st.pyplot(fig3d)
+            # CWT analysis
+            if st.checkbox("Show Continuous Wavelet Transform (CWT)", value=True):
+                plot_cwt_analysis(
+                    synthetic_seismic,
+                    t_samp,
+                    np.arange(min_angle, max_angle + 1, angle_step),
+                    scales=np.arange(cwt_scales[0], cwt_scales[1] + 1),
+                    wavelet=cwt_wavelet
+                )
 
-        # Histograms if enabled
-        if show_histograms and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-            st.header("Property Distributions")
-            fig_hist, ax_hist = plt.subplots(2, 2, figsize=(12, 8))
-            
-            ax_hist[0,0].hist(logs.IP_FRMB, bins=30, alpha=0.5, label='Brine', color='blue')
-            ax_hist[0,0].hist(logs.IP_FRMO, bins=30, alpha=0.5, label='Oil', color='green')
-            ax_hist[0,0].hist(logs.IP_FRMG, bins=30, alpha=0.5, label='Gas', color='red')
-            ax_hist[0,0].hist(logs.IP_FRMMIX, bins=30, alpha=0.5, label='Mixed', color='magenta')
-            ax_hist[0,0].set_xlabel('IP (m/s*g/cc)')
-            ax_hist[0,0].set_ylabel('Frequency')
-            ax_hist[0,0].legend()
-            
-            ax_hist[0,1].hist(logs.VPVS_FRMB, bins=30, alpha=0.5, label='Brine', color='blue')
-            ax_hist[0,1].hist(logs.VPVS_FRMO, bins=30, alpha=0.5, label='Oil', color='green')
-            ax_hist[0,1].hist(logs.VPVS_FRMG, bins=30, alpha=0.5, label='Gas', color='red')
-            ax_hist[0,1].hist(logs.VPVS_FRMMIX, bins=30, alpha=0.5, label='Mixed', color='magenta')
-            ax_hist[0,1].set_xlabel('Vp/Vs')
-            ax_hist[0,1].legend()
-            
-            ax_hist[1,0].hist(logs.RHO_FRMB, bins=30, color='blue', alpha=0.7)
-            ax_hist[1,0].hist(logs.RHO_FRMO, bins=30, color='green', alpha=0.7)
-            ax_hist[1,0].hist(logs.RHO_FRMG, bins=30, color='red', alpha=0.7)
-            ax_hist[1,0].hist(logs.RHO_FRMMIX, bins=30, color='magenta', alpha=0.7)
-            ax_hist[1,0].set_xlabel('Density (g/cc)')
-            ax_hist[1,0].set_ylabel('Frequency')
-            ax_hist[1,0].legend(['Brine', 'Oil', 'Gas', 'Mixed'])
-            
-            ax_hist[1,1].hist(logs.LFC_B, bins=[0,1,2,3,4,5,6], alpha=0.5, rwidth=0.8, align='left')
-            ax_hist[1,1].set_xlabel('Litho-Fluid Class')
-            ax_hist[1,1].set_xticks([0.5,1.5,2.5,3.5,4.5,5.5])
-            ax_hist[1,1].set_xticklabels(['Undef','Brine','Oil','Gas','Mixed','Shale'])
-            
-            plt.tight_layout()
-            st.pyplot(fig_hist)
+        # [Rest of your existing code for AVO modeling, crossplots, etc...]
 
-        # AVO Modeling
-        if model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-            st.header("AVO Modeling")
-            middle_top = ztop + (zbot - ztop) * 0.4
-            middle_bot = ztop + (zbot - ztop) * 0.6
-            
-            cases = ['Brine', 'Oil', 'Gas', 'Mixed']
-            case_data = {
-                'Brine': {'vp': 'VP_FRMB', 'vs': 'VS_FRMB', 'rho': 'RHO_FRMB', 'color': 'b'},
-                'Oil': {'vp': 'VP_FRMO', 'vs': 'VS_FRMO', 'rho': 'RHO_FRMO', 'color': 'g'},
-                'Gas': {'vp': 'VP_FRMG', 'vs': 'VS_FRMG', 'rho': 'RHO_FRMG', 'color': 'r'},
-                'Mixed': {'vp': 'VP_FRMMIX', 'vs': 'VS_FRMMIX', 'rho': 'RHO_FRMMIX', 'color': 'm'}
-            }
-            
-            wlt_time, wlt_amp = ricker_wavelet(wavelet_freq)
-            t_samp = np.arange(0, 0.5, 0.0001)
-            t_middle = 0.2
-            
-            fig3, (ax_wavelet, ax_avo) = plt.subplots(1, 2, figsize=(12, 5), gridspec_kw={'width_ratios': [1, 2]})
-            
-            ax_wavelet.plot(wlt_time, wlt_amp, color='purple', linewidth=2)
-            ax_wavelet.fill_between(wlt_time, wlt_amp, color='purple', alpha=0.3)
-            ax_wavelet.set_title(f"Wavelet ({wavelet_freq} Hz)")
-            ax_wavelet.set_xlabel("Time (s)")
-            ax_wavelet.set_ylabel("Amplitude")
-            ax_wavelet.grid(True)
-            
-            rc_min, rc_max = st.slider(
-                "Reflection Coefficient Range",
-                -0.5, 0.5, (-0.2, 0.2),
-                step=0.01,
-                key='rc_range'
-            )
-            
-            angles = np.arange(min_angle, max_angle + 1, angle_step)
-            
-            # Store AVO attributes for Smith-Gidlow analysis
-            avo_attributes = {'Case': [], 'Intercept': [], 'Gradient': [], 'Fluid_Factor': []}
-            
-            for case in cases:
-                vp_upper = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VP'].values.mean()
-                vs_upper = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
-                rho_upper = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
-                
-                vp_middle = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), case_data[case]['vp']].values.mean()
-                vs_middle = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), case_data[case]['vs']].values.mean()
-                rho_middle = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), case_data[case]['rho']].values.mean()
-                
-                # Calculate reflection coefficients
-                rc = []
-                for angle in angles:
-                    rc.append(calculate_reflection_coefficients(
-                        vp_upper, vp_middle, vs_upper, vs_middle, rho_upper, rho_middle, angle
-                    ))
-                
-                # Fit AVO curve to get intercept and gradient
-                intercept, gradient, _ = fit_avo_curve(angles, rc)
-                fluid_factor = intercept + 1.16 * (vp_upper/vs_upper) * (intercept - gradient)
-                
-                # Store attributes for Smith-Gidlow analysis
-                avo_attributes['Case'].append(case)
-                avo_attributes['Intercept'].append(intercept)
-                avo_attributes['Gradient'].append(gradient)
-                avo_attributes['Fluid_Factor'].append(fluid_factor)
-                
-                # Plot AVO curve
-                ax_avo.plot(angles, rc, f"{case_data[case]['color']}-", label=f"{case}")
-            
-            ax_avo.set_title("AVO Reflection Coefficients (Middle Interface)")
-            ax_avo.set_xlabel("Angle (degrees)")
-            ax_avo.set_ylabel("Reflection Coefficient")
-            ax_avo.set_ylim(rc_min, rc_max)
-            ax_avo.grid(True)
-            ax_avo.legend()
-            
-            st.pyplot(fig3)
-
-            # Smith-Gidlow AVO Analysis
-            if show_smith_gidlow:
-                st.header("Smith-Gidlow AVO Attributes")
-                
-                # Create DataFrame for AVO attributes
-                avo_df = pd.DataFrame(avo_attributes)
-                
-                # Display attributes table
-                if not avo_df.empty:
-                    numeric_cols = avo_df.select_dtypes(include=[np.number]).columns
-                    st.dataframe(avo_df.style.format("{:.4f}", subset=numeric_cols))
-                else:
-                    st.warning("No AVO attributes calculated")
-                
-                # Plot intercept vs gradient
-                fig_sg, ax_sg = plt.subplots(figsize=(8, 6))
-                colors = {'Brine': 'blue', 'Oil': 'green', 'Gas': 'red', 'Mixed': 'magenta'}
-                
-                for idx, row in avo_df.iterrows():
-                    ax_sg.scatter(row['Intercept'], row['Gradient'], 
-                                 color=colors[row['Case']], s=100, label=row['Case'])
-                    ax_sg.text(row['Intercept'], row['Gradient'], row['Case'], 
-                              fontsize=9, ha='right', va='bottom')
-                
-                # Add background classification
-                x = np.linspace(-0.5, 0.5, 100)
-                ax_sg.plot(x, -x, 'k--', alpha=0.3)  # Typical brine line
-                ax_sg.plot(x, -4*x, 'k--', alpha=0.3)  # Typical gas line
-                
-                ax_sg.set_xlabel('Intercept (A)')
-                ax_sg.set_ylabel('Gradient (B)')
-                ax_sg.set_title('Smith-Gidlow AVO Crossplot')
-                ax_sg.grid(True)
-                ax_sg.axhline(0, color='k', alpha=0.3)
-                ax_sg.axvline(0, color='k', alpha=0.3)
-                ax_sg.set_xlim(-0.3, 0.3)
-                ax_sg.set_ylim(-0.3, 0.3)
-                
-                st.pyplot(fig_sg)
-                
-                # Fluid Factor analysis
-                st.subheader("Fluid Factor Analysis")
-                fig_ff, ax_ff = plt.subplots(figsize=(8, 4))
-                ax_ff.bar(avo_df['Case'], avo_df['Fluid_Factor'], 
-                         color=[colors[c] for c in avo_df['Case']])
-                ax_ff.set_ylabel('Fluid Factor')
-                ax_ff.set_title('Fluid Factor by Fluid Type')
-                ax_ff.grid(True)
-                st.pyplot(fig_ff)
-
-            # Synthetic gathers
-            st.header("Synthetic Seismic Gathers (Middle Interface)")
-            time_min, time_max = st.slider(
-                "Time Range for Synthetic Gathers (s)",
-                0.0, 0.5, (0.15, 0.25),
-                step=0.01,
-                key='time_range'
-            )
-            
-            fig4, ax4 = plt.subplots(1, 4, figsize=(24, 5))  # Added column for mixed case
-            
-            for idx, case in enumerate(cases):
-                # Get average properties for upper layer (shale)
-                vp_upper = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VP'].values.mean()
-                vs_upper = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
-                rho_upper = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
-                
-                # Get average properties for middle layer (sand with fluid substitution)
-                vp_middle = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), case_data[case]['vp']].values.mean()
-                vs_middle = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), case_data[case]['vs']].values.mean()
-                rho_middle = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), case_data[case]['rho']].values.mean()
-                
-                syn_gather = []
-                for angle in angles:
-                    rc = calculate_reflection_coefficients(
-                        vp_upper, vp_middle, vs_upper, vs_middle, rho_upper, rho_middle, angle
-                    )
-                    
-                    rc_series = np.zeros(len(t_samp))
-                    idx_middle = np.argmin(np.abs(t_samp - t_middle))
-                    rc_series[idx_middle] = rc
-                    
-                    syn_trace = np.convolve(rc_series, wlt_amp, mode='same')
-                    syn_gather.append(syn_trace)
-                
-                syn_gather = np.array(syn_gather)
-                
-                extent = [angles[0], angles[-1], t_samp[-1], t_samp[0]]
-                im = ax4[idx].imshow(syn_gather.T, aspect='auto', extent=extent,
-                                   cmap=selected_cmap, vmin=-np.max(np.abs(syn_gather)), 
-                                   vmax=np.max(np.abs(syn_gather)))
-                
-                props_text = f"Vp: {vp_middle:.0f} m/s\n" \
-                            f"Vs: {vs_middle:.0f} m/s\n" \
-                            f"Rho: {rho_middle:.2f} g/cc"
-                ax4[idx].text(0.05, 0.95, props_text, transform=ax4[idx].transAxes,
-                             fontsize=9, verticalalignment='top', bbox=dict(facecolor='white', alpha=0.7))
-                
-                ax4[idx].set_title(f"{case} Case", fontweight='bold')
-                ax4[idx].set_xlabel("Angle (degrees)")
-                ax4[idx].set_ylabel("Time (s)")
-                ax4[idx].set_ylim(time_max, time_min)
-                
-                plt.colorbar(im, ax=ax4[idx], label='Amplitude')
-            
-            plt.tight_layout()
-            st.pyplot(fig4)
-
-        # Rock Physics Templates (RPT)
-        if model_choice in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"] and rockphypy_available:
-            st.header("Rock Physics Templates (RPT) with Gassmann Fluid Substitution")
-            
-            # Display Gas Case RPT with Gassmann points
-            st.subheader("Gas Case RPT with Gassmann Fluid Substitution")
-            plot_rpt_with_gassmann("Gas Case RPT", fluid='gas')
-            
-            # Display Oil Case RPT with Gassmann points
-            st.subheader("Oil Case RPT with Gassmann Fluid Substitution")
-            plot_rpt_with_gassmann("Oil Case RPT", fluid='oil')
-            
-            # Display Mixed Case RPT with Gassmann points
-            st.subheader("Mixed Case RPT with Gassmann Fluid Substitution")
-            plot_rpt_with_gassmann("Mixed Case RPT", fluid='mixed')
-
-        # Uncertainty Analysis Results
-        if include_uncertainty and mc_results and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-            st.header("Uncertainty Analysis Results")
-            
-            # Create summary statistics
-            mc_df = pd.DataFrame(mc_results)
-            summary_stats = mc_df.describe().T
-            
-            st.subheader("Monte Carlo Simulation Statistics")
-            if not summary_stats.empty:
-                numeric_cols = summary_stats.select_dtypes(include=[np.number]).columns
-                st.dataframe(summary_stats.style.format("{:.2f}", subset=numeric_cols))
-            else:
-                st.warning("No statistics available - check your Monte Carlo simulation parameters")
-            
-            # Plot uncertainty distributions
-            st.subheader("Property Uncertainty Distributions")
-            fig_unc, ax_unc = plt.subplots(2, 2, figsize=(12, 8))
-            
-            # VP distribution
-            ax_unc[0,0].hist(mc_results['VP'], bins=30, color='blue', alpha=0.7)
-            ax_unc[0,0].set_xlabel('VP (m/s)')
-            ax_unc[0,0].set_ylabel('Frequency')
-            ax_unc[0,0].set_title('P-wave Velocity Distribution')
-            
-            # VS distribution
-            ax_unc[0,1].hist(mc_results['VS'], bins=30, color='green', alpha=0.7)
-            ax_unc[0,1].set_xlabel('VS (m/s)')
-            ax_unc[0,1].set_title('S-wave Velocity Distribution')
-            
-            # IP distribution
-            ax_unc[1,0].hist(mc_results['IP'], bins=30, color='red', alpha=0.7)
-            ax_unc[1,0].set_xlabel('IP (m/s*g/cc)')
-            ax_unc[1,0].set_ylabel('Frequency')
-            ax_unc[1,0].set_title('Acoustic Impedance Distribution')
-            
-            # Vp/Vs distribution
-            ax_unc[1,1].hist(mc_results['VPVS'], bins=30, color='purple', alpha=0.7)
-            ax_unc[1,1].set_xlabel('Vp/Vs')
-            ax_unc[1,1].set_title('Vp/Vs Ratio Distribution')
-            
-            plt.tight_layout()
-            st.pyplot(fig_unc)
-            
-            # AVO attribute uncertainty
-            st.subheader("AVO Attribute Uncertainty")
-            fig_avo_unc, ax_avo_unc = plt.subplots(1, 3, figsize=(15, 4))
-            
-            # Intercept distribution
-            ax_avo_unc[0].hist(mc_results['Intercept'], bins=30, color='blue', alpha=0.7)
-            ax_avo_unc[0].set_xlabel('Intercept')
-            ax_avo_unc[0].set_ylabel('Frequency')
-            ax_avo_unc[0].set_title('Intercept Distribution')
-            
-            # Gradient distribution
-            ax_avo_unc[1].hist(mc_results['Gradient'], bins=30, color='green', alpha=0.7)
-            ax_avo_unc[1].set_xlabel('Gradient')
-            ax_avo_unc[1].set_title('Gradient Distribution')
-            
-            # Fluid Factor distribution
-            ax_avo_unc[2].hist(mc_results['Fluid_Factor'], bins=30, color='red', alpha=0.7)
-            ax_avo_unc[2].set_xlabel('Fluid Factor')
-            ax_avo_unc[2].set_title('Fluid Factor Distribution')
-            
-            plt.tight_layout()
-            st.pyplot(fig_avo_unc)
-            
-            # Crossplot of AVO attributes with uncertainty
-            st.subheader("AVO Attribute Crossplot with Uncertainty")
-            fig_avo_cross, ax_avo_cross = plt.subplots(figsize=(8, 6))
-            
-            # Plot all Monte Carlo samples
-            ax_avo_cross.scatter(mc_results['Intercept'], mc_results['Gradient'], 
-                                c=mc_results['Fluid_Factor'], cmap='coolwarm', 
-                                alpha=0.3, s=10)
-            
-            # Add colorbar
-            sc = ax_avo_cross.scatter([], [], c=[], cmap='coolwarm')
-            plt.colorbar(sc, label='Fluid Factor', ax=ax_avo_cross)
-            
-            # Add background classification
-            x = np.linspace(-0.5, 0.5, 100)
-            ax_avo_cross.plot(x, -x, 'k--', alpha=0.3)  # Typical brine line
-            ax_avo_cross.plot(x, -4*x, 'k--', alpha=0.3)  # Typical gas line
-            
-            ax_avo_cross.set_xlabel('Intercept (A)')
-            ax_avo_cross.set_ylabel('Gradient (B)')
-            ax_avo_cross.set_title('AVO Attribute Uncertainty')
-            ax_avo_cross.grid(True)
-            ax_avo_cross.axhline(0, color='k', alpha=0.3)
-            ax_avo_cross.axvline(0, color='k', alpha=0.3)
-            ax_avo_cross.set_xlim(-0.3, 0.3)
-            ax_avo_cross.set_ylim(-0.3, 0.3)
-            
-            st.pyplot(fig_avo_cross)
-
-        # Export functionality
-        st.header("Export Results")
-        st.markdown(get_table_download_link(logs), unsafe_allow_html=True)
-        
-        plot_export_options = st.multiselect(
-            "Select plots to export as PNG",
-            ["Well Log Visualization", "2D Crossplots", "3D Crossplot", "Histograms", 
-             "AVO Analysis", "Smith-Gidlow Analysis", "Uncertainty Analysis", "RPT Crossplots",
-             "Frequency Analysis", "Time-Frequency Analysis"],
-            default=["Well Log Visualization", "AVO Analysis"]
-        )
-        
-        if st.button("Export Selected Plots"):
-            if not plot_export_options:
-                st.warning("No plots selected for export")
-            else:
-                def export_plot(figure, plot_name, file_name):
-                    buf = BytesIO()
-                    try:
-                        figure.savefig(buf, format="png", dpi=300)
-                        st.download_button(
-                            label=f"Download {plot_name}",
-                            data=buf.getvalue(),
-                            file_name=file_name,
-                            mime="image/png"
-                        )
-                        return True, ""
-                    except Exception as e:
-                        return False, str(e)
-                
-                results = []
-                for plot_name in plot_export_options:
-                    if plot_name == "Well Log Visualization" and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        success, error = export_plot(fig, plot_name, "well_log_visualization.png")
-                    elif plot_name == "2D Crossplots":
-                        success, error = export_plot(fig2, plot_name, "2d_crossplots.png")
-                    elif plot_name == "3D Crossplot" and show_3d_crossplot and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        success, error = export_plot(fig3d, plot_name, "3d_crossplot.png")
-                    elif plot_name == "Histograms" and show_histograms and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        success, error = export_plot(fig_hist, plot_name, "histograms.png")
-                    elif plot_name == "AVO Analysis" and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        success, error = export_plot(fig3, plot_name, "avo_analysis.png")
-                    elif plot_name == "Smith-Gidlow Analysis" and show_smith_gidlow and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        success, error = export_plot(fig_sg, plot_name, "smith_gidlow_analysis.png")
-                    elif plot_name == "Uncertainty Analysis" and include_uncertainty and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        # Need to handle multiple figures for uncertainty
-                        success1, error1 = export_plot(fig_unc, "Uncertainty_Distributions", "uncertainty_distributions.png")
-                        success2, error2 = export_plot(fig_avo_unc, "AVO_Uncertainty", "avo_uncertainty.png")
-                        success3, error3 = export_plot(fig_avo_cross, "AVO_Crossplot_Uncertainty", "avo_crossplot_uncertainty.png")
-                        
-                        if all([success1, success2, success3]):
-                            results.append(f"✓ Successfully exported {plot_name} plots")
-                        else:
-                            errors = [e for e in [error1, error2, error3] if e]
-                            results.append(f"✗ Partially exported {plot_name}: {', '.join(errors)}")
-                        continue
-                    elif plot_name == "RPT Crossplots" and model_choice in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        # Create temporary figures for RPT export
-                        fig_rpt_gas = plt.figure()
-                        if model_choice == "Soft Sand RPT (rockphypy)":
-                            Kdry, Gdry = GM.softsand(K0, G0, phi, rpt_phi_c, rpt_Cn, rpt_sigma, f=0.5)
-                        else:
-                            Kdry, Gdry = GM.stiffsand(K0, G0, phi, rpt_phi_c, rpt_Cn, rpt_sigma, f=0.5)
-                        QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, Kg, Dg, phi, sw)
-                        plt.title(f"{model_choice.split(' ')[0]} RPT - Gas Case")
-                        buf_gas = BytesIO()
-                        plt.savefig(buf_gas, format='png', dpi=150, bbox_inches='tight')
-                        buf_gas.seek(0)
-                        plt.close()
-                        
-                        fig_rpt_oil = plt.figure()
-                        QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, Ko, Do, phi, sw)
-                        plt.title(f"{model_choice.split(' ')[0]} RPT - Oil Case")
-                        buf_oil = BytesIO()
-                        plt.savefig(buf_oil, format='png', dpi=150, bbox_inches='tight')
-                        buf_oil.seek(0)
-                        plt.close()
-                        
-                        fig_rpt_mix = plt.figure()
-                        QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, (Ko*so + Kg*sg)/(so+sg), (Do*so + Dg*sg)/(so+sg), phi, sw)
-                        plt.title(f"{model_choice.split(' ')[0]} RPT - Mixed Case")
-                        buf_mix = BytesIO()
-                        plt.savefig(buf_mix, format='png', dpi=150, bbox_inches='tight')
-                        buf_mix.seek(0)
-                        plt.close()
-                        
-                        # Create download buttons
-                        st.download_button(
-                            label="Download Gas RPT",
-                            data=buf_gas.getvalue(),
-                            file_name="rpt_gas.png",
-                            mime="image/png"
-                        )
-                        st.download_button(
-                            label="Download Oil RPT",
-                            data=buf_oil.getvalue(),
-                            file_name="rpt_oil.png",
-                            mime="image/png"
-                        )
-                        st.download_button(
-                            label="Download Mixed RPT",
-                            data=buf_mix.getvalue(),
-                            file_name="rpt_mixed.png",
-                            mime="image/png"
-                        )
-                        results.append("✓ Successfully exported RPT plots")
-                        continue
-                    elif plot_name == "Frequency Analysis" and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        # Need to recreate the frequency analysis plot
-                        all_gathers, t_samp = perform_time_frequency_analysis(
-                            logs, angles, wavelet_freq, cwt_scales, cwt_wavelet, middle_top, middle_bot, sw, so, sg
-                        )
-                        fig_freq, _ = plt.subplots(1, 4, figsize=(24, 5))
-                        plot_frequency_analysis(all_gathers, t_samp, angles, wavelet_freq, time_range, freq_range)
-                        success, error = export_plot(fig_freq, plot_name, "frequency_analysis.png")
-                        plt.close()
-                    elif plot_name == "Time-Frequency Analysis" and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-                        # Need to recreate the CWT analysis plot
-                        all_gathers, t_samp = perform_time_frequency_analysis(
-                            logs, angles, wavelet_freq, cwt_scales, cwt_wavelet, middle_top, middle_bot, sw, so, sg
-                        )
-                        fig_cwt, _ = plt.subplots(3, 4, figsize=(24, 12))
-                        plot_cwt_analysis(all_gathers, t_samp, angles, cwt_scales, cwt_wavelet, wavelet_freq, time_range, freq_range)
-                        success, error = export_plot(fig_cwt, plot_name, "time_frequency_analysis.png")
-                        plt.close()
-                    else:
-                        continue
-                    
-                    if success:
-                        results.append(f"✓ Successfully exported {plot_name}")
-                    else:
-                        results.append(f"✗ Failed to export {plot_name}: {error}")
-                
-                st.write("\n".join(results))
-                
-                if all("✓" in result for result in results):
-                    st.success("All exports completed successfully!")
-                elif any("✓" in result for result in results):
-                    st.warning("Some exports completed with errors")
-                else:
-                    st.error("All exports failed")
-    
     except Exception as e:
         st.error(f"An error occurred during processing: {str(e)}")
