@@ -1806,8 +1806,8 @@ if uploaded_file is not None:
     
             # Wedge parameters
             col1, col2, col3 = st.columns(3)
-          with col1:
-               st.subheader("Layer 1 (Shale)")
+     with col1:
+         st.subheader("Layer 1 (Shale)")
            vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
            vs1 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs1")
            rho1 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho1")
