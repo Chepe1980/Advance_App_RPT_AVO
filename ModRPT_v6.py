@@ -1835,16 +1835,16 @@ if uploaded_file is not None:
                wavelet_freq = st.number_input("Wavelet frequency (Hz)", value=wavelet_freq, min_value=10, max_value=100)
     
            # Time parameters
-              st.subheader("Time Parameters")
-              tmin = st.number_input("Start time (s)", value=0.0)
-              tmax = st.number_input("End time (s)", value=0.5)
-              dt = st.number_input("Time step (s)", value=0.0001)
+               st.subheader("Time Parameters")
+               tmin = st.number_input("Start time (s)", value=0.0)
+               tmax = st.number_input("End time (s)", value=0.5)
+               dt = st.number_input("Time step (s)", value=0.0001)
     
            # Display parameters
-             st.subheader("Display Parameters")
-             min_plot_time = st.number_input("Min display time (s)", value=0.15)
-             max_plot_time = st.number_input("Max display time (s)", value=0.3)
-             excursion = st.number_input("Trace excursion", value=0.5)
+               st.subheader("Display Parameters")
+               min_plot_time = st.number_input("Min display time (s)", value=0.15)
+               max_plot_time = st.number_input("Max display time (s)", value=0.3)
+               excursion = st.number_input("Trace excursion", value=0.5)
     
            # Generate synthetic data
            with st.spinner('Generating wedge model...'):
