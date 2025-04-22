@@ -1790,11 +1790,11 @@ if uploaded_file is not None:
             # Add this to your sidebar (with other visualization options)
             show_wedge_model = st.sidebar.checkbox("Show Wedge Modeling", value=False)
 
-# Add this after your AVO modeling section
-if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-    st.header("Seismic Wedge Modeling")
+            # Add this after your AVO modeling section
+            if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
+            st.header("Seismic Wedge Modeling")
     
-    # Use rock physics results as default values
+            # Use rock physics results as default values
     default_vp = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VP_FRMMIX'].values.mean()
     default_vs = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VS_FRMMIX'].values.mean()
     default_rho = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'RHO_FRMMIX'].values.mean()
