@@ -1795,22 +1795,22 @@ if uploaded_file is not None:
                st.header("Seismic Wedge Modeling")
     
             # Use rock physics results as default values
-    default_vp = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VP_FRMMIX'].values.mean()
-    default_vs = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VS_FRMMIX'].values.mean()
-    default_rho = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'RHO_FRMMIX'].values.mean()
+            default_vp = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VP_FRMMIX'].values.mean()
+            default_vs = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VS_FRMMIX'].values.mean()
+            default_rho = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'RHO_FRMMIX'].values.mean()
     
-    # Get shale properties from above the sand
-    shale_vp = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VP'].values.mean()
-    shale_vs = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
-    shale_rho = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
+            # Get shale properties from above the sand
+            shale_vp = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VP'].values.mean()
+            shale_vs = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
+            shale_rho = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
     
-    # Wedge parameters
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.subheader("Layer 1 (Shale)")
-        vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
-        vs1 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs1")
-        rho1 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho1")
+            # Wedge parameters
+           col1, col2, col3 = st.columns(3)
+          with col1:
+               st.subheader("Layer 1 (Shale)")
+           vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
+           vs1 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs1")
+           rho1 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho1")
     
     with col2:
         st.subheader("Layer 2 (Sand)")
