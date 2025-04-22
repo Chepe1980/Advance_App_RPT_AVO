@@ -1804,25 +1804,25 @@ if uploaded_file is not None:
             shale_vs = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
             shale_rho = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
     
-# Wedge parameters
-col1, col2, col3 = st.columns(3)
-with col1:
-    st.subheader("Layer 1 (Shale)")
-    vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
-    vs1 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs1")
-    rho1 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho1")
+            # Wedge parameters
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.subheader("Layer 1 (Shale)")
+                vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
+                vs1 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs1")
+                rho1 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho1")
 
-with col2: # Indented this block to align with 'with col1:'
-    st.subheader("Layer 2 (Sand)")
-    vp2 = st.number_input("Vp (m/s)", value=default_vp, key="wedge_vp2")
-    vs2 = st.number_input("Vs (m/s)", value=default_vs, key="wedge_vs2")
-    rho2 = st.number_input("Density (g/cc)", value=default_rho, key="wedge_rho2")
+            with col2: # Indented this block to align with 'with col1:'
+               st.subheader("Layer 2 (Sand)")
+               vp2 = st.number_input("Vp (m/s)", value=default_vp, key="wedge_vp2")
+               vs2 = st.number_input("Vs (m/s)", value=default_vs, key="wedge_vs2")
+               rho2 = st.number_input("Density (g/cc)", value=default_rho, key="wedge_rho2")
 
-with col3: # Indented this block to align with 'with col1:'
-    st.subheader("Layer 3 (Shale)")
-    vp3 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp3")
-    vs3 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs3")
-    rho3 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho3")
+            with col3: # Indented this block to align with 'with col1:'
+               st.subheader("Layer 3 (Shale)")
+               vp3 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp3")
+               vs3 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs3")
+               rho3 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho3")
     
      
     # Wedge geometry
