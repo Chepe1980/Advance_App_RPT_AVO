@@ -1788,7 +1788,7 @@ if uploaded_file is not None:
             
             st.pyplot(fig_avo_cross)
             # Add this to your sidebar (with other visualization options)
-show_wedge_model = st.sidebar.checkbox("Show Wedge Modeling", value=False)
+            show_wedge_model = st.sidebar.checkbox("Show Wedge Modeling", value=False)
 
 # Add this after your AVO modeling section
 if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
