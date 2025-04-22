@@ -1825,35 +1825,35 @@ if uploaded_file is not None:
                rho3 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho3")
     
      
-    # Wedge geometry
-    st.subheader("Wedge Geometry")
-    dz_min, dz_max = st.slider("Thickness range (m)", 0.0, 100.0, (0.0, 60.0), 1.0)
-    dz_step = st.number_input("Thickness step (m)", value=1.0, min_value=0.1, max_value=10.0)
+            # Wedge geometry
+           st.subheader("Wedge Geometry")
+           dz_min, dz_max = st.slider("Thickness range (m)", 0.0, 100.0, (0.0, 60.0), 1.0)
+           dz_step = st.number_input("Thickness step (m)", value=1.0, min_value=0.1, max_value=10.0)
     
-    # Wavelet parameters (reuse from AVO section)
-    st.subheader("Wavelet Parameters")
-    wavelet_freq = st.number_input("Wavelet frequency (Hz)", value=wavelet_freq, min_value=10, max_value=100)
+           # Wavelet parameters (reuse from AVO section)
+           st.subheader("Wavelet Parameters")
+           wavelet_freq = st.number_input("Wavelet frequency (Hz)", value=wavelet_freq, min_value=10, max_value=100)
     
-    # Time parameters
-    st.subheader("Time Parameters")
-    tmin = st.number_input("Start time (s)", value=0.0)
-    tmax = st.number_input("End time (s)", value=0.5)
-    dt = st.number_input("Time step (s)", value=0.0001)
+           # Time parameters
+           st.subheader("Time Parameters")
+           tmin = st.number_input("Start time (s)", value=0.0)
+           tmax = st.number_input("End time (s)", value=0.5)
+           dt = st.number_input("Time step (s)", value=0.0001)
     
-    # Display parameters
-    st.subheader("Display Parameters")
-    min_plot_time = st.number_input("Min display time (s)", value=0.15)
-    max_plot_time = st.number_input("Max display time (s)", value=0.3)
-    excursion = st.number_input("Trace excursion", value=0.5)
+           # Display parameters
+           st.subheader("Display Parameters")
+           min_plot_time = st.number_input("Min display time (s)", value=0.15)
+           max_plot_time = st.number_input("Max display time (s)", value=0.3)
+           excursion = st.number_input("Trace excursion", value=0.5)
     
-    # Generate synthetic data
-    with st.spinner('Generating wedge model...'):
-        vp_mod = [vp1, vp2, vp3]
-        vs_mod = [vs1, vs2, vs3]
-        rho_mod = [rho1, rho2, rho3]
+           # Generate synthetic data
+           with st.spinner('Generating wedge model...'):
+              vp_mod = [vp1, vp2, vp3]
+              vs_mod = [vs1, vs2, vs3]
+              rho_mod = [rho1, rho2, rho3]
         
-        nlayers = len(vp_mod)
-        nint = nlayers - 1
+          nlayers = len(vp_mod)
+          nint = nlayers - 1
         nmodel = int((dz_max-dz_min)/dz_step+1)
 
         # Generate wavelet (reuse your ricker_wavelet function)
