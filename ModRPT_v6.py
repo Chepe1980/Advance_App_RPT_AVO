@@ -1826,7 +1826,7 @@ if uploaded_file is not None:
     
      
             # Wedge geometry
-           st.subheader("Wedge Geometry")
+               st.subheader("Wedge Geometry")
            dz_min, dz_max = st.slider("Thickness range (m)", 0.0, 100.0, (0.0, 60.0), 1.0)
            dz_step = st.number_input("Thickness step (m)", value=1.0, min_value=0.1, max_value=10.0)
     
