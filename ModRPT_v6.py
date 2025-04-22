@@ -1789,7 +1789,7 @@ if uploaded_file is not None:
             st.pyplot(fig_avo_cross)
 
         # Add this after your AVO modeling section
-if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
+       if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
     st.header("Seismic Wedge Modeling")
     
     # Use rock physics results as default values
