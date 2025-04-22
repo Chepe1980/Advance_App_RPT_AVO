@@ -1805,7 +1805,7 @@ if uploaded_file is not None:
             shale_rho = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
     
             # Wedge parameters
-           col1, col2, col3 = st.columns(3)
+            col1, col2, col3 = st.columns(3)
           with col1:
                st.subheader("Layer 1 (Shale)")
            vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
