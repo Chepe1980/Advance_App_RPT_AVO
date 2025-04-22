@@ -1787,9 +1787,11 @@ if uploaded_file is not None:
             ax_avo_cross.set_ylim(-0.3, 0.3)
             
             st.pyplot(fig_avo_cross)
+            # Add this to your sidebar (with other visualization options)
+show_wedge_model = st.sidebar.checkbox("Show Wedge Modeling", value=False)
 
-        # Add this after your AVO modeling section
-       if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
+# Add this after your AVO modeling section
+if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
     st.header("Seismic Wedge Modeling")
     
     # Use rock physics results as default values
@@ -1939,3 +1941,7 @@ if uploaded_file is not None:
 
     st.pyplot(fig_wedge)
     st.success('Wedge modeling complete!')
+
+    
+
+     
