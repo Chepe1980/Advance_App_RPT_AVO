@@ -1890,58 +1890,58 @@ if uploaded_file is not None:
         tuning_thickness = tuning_trace * dz_step
 
           # Create plots
-            fig_wedge = plt.figure(figsize=(12, 14))
-       fig_wedge.set_facecolor('white')
-       gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 1])
+fig_wedge = plt.figure(figsize=(12, 14))
+fig_wedge.set_facecolor('white')
+gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 1])
 
-         ax0 = fig_wedge.add_subplot(gs[0])
-         ax0.plot(lyr_times[:,0], color='blue', lw=1.5)
-         ax0.plot(lyr_times[:,1], color='red', lw=1.5)
-         ax0.set_ylim((min_plot_time,max_plot_time))
-         ax0.invert_yaxis()
-         ax0.set_xlabel('Thickness (m)')
-         ax0.set_ylabel('Time (s)')
-    plt.text(2,
+ax0 = fig_wedge.add_subplot(gs[0])
+ax0.plot(lyr_times[:,0], color='blue', lw=1.5)
+ax0.plot(lyr_times[:,1], color='red', lw=1.5)
+ax0.set_ylim((min_plot_time,max_plot_time))
+ax0.invert_yaxis()
+ax0.set_xlabel('Thickness (m)')
+ax0.set_ylabel('Time (s)')
+plt.text(2,
             min_plot_time + (lyr_times[0,0] - min_plot_time)/2.,
             'Layer 1',
             fontsize=16)
-    plt.text(dz_max/dz_step - 2,
+plt.text(dz_max/dz_step - 2,
             lyr_times[-1,0] + (lyr_times[-1,1] - lyr_times[-1,0])/2.,
             'Layer 2',
             fontsize=16,
             horizontalalignment='right')
-    plt.text(2,
+plt.text(2,
             lyr_times[0,0] + (max_plot_time - lyr_times[0,0])/2.,
             'Layer 3',
             fontsize=16)
-    plt.gca().xaxis.tick_top()
-    plt.gca().xaxis.set_label_position('top')
-    ax0.set_xlim((-excursion, nmodel+excursion))
+plt.gca().xaxis.tick_top()
+plt.gca().xaxis.set_label_position('top')
+ax0.set_xlim((-excursion, nmodel+excursion))
 
-    ax1 = fig_wedge.add_subplot(gs[1])
-    plot_vawig(ax1, syn_zo, t, excursion, highlight=tuning_trace)
-    ax1.plot(lyr_times[:,0], color='blue', lw=1.5)
-    ax1.plot(lyr_times[:,1], color='red', lw=1.5)
-    ax1.set_ylim((min_plot_time,max_plot_time))
-    ax1.invert_yaxis()
-    ax1.set_xlabel('Thickness (m)')
-    ax1.set_ylabel('Time (s)')
+ax1 = fig_wedge.add_subplot(gs[1])
+plot_vawig(ax1, syn_zo, t, excursion, highlight=tuning_trace)
+ax1.plot(lyr_times[:,0], color='blue', lw=1.5)
+ax1.plot(lyr_times[:,1], color='red', lw=1.5)
+ax1.set_ylim((min_plot_time,max_plot_time))
+ax1.invert_yaxis()
+ax1.set_xlabel('Thickness (m)')
+ax1.set_ylabel('Time (s)')
 
-    ax2 = fig_wedge.add_subplot(gs[2])
-    ax2.plot(syn_zo[:,lyr_indx[:,0]], color='blue')
-    ax2.set_xlim((-excursion, nmodel+excursion))
-    ax2.axvline(tuning_trace, color='k', lw=2)
-    ax2.grid()
-    ax2.set_title('Upper interface amplitude')
-    ax2.set_xlabel('Thickness (m)')
-    ax2.set_ylabel('Amplitude')
-    plt.text(tuning_trace + 2,
-            plt.ylim()[0] * 1.1,
-            f'Tuning thickness = {tuning_thickness:.1f} m',
-            fontsize=16)
+ax2 = fig_wedge.add_subplot(gs[2])
+ax2.plot(syn_zo[:,lyr_indx[:,0]], color='blue')
+ax2.set_xlim((-excursion, nmodel+excursion))
+ax2.axvline(tuning_trace, color='k', lw=2)
+ax2.grid()
+ax2.set_title('Upper interface amplitude')
+ax2.set_xlabel('Thickness (m)')
+ax2.set_ylabel('Amplitude')
+plt.text(tuning_trace + 2,
+         plt.ylim()[0] * 1.1,
+         f'Tuning thickness = {tuning_thickness:.1f} m',
+         fontsize=16)
 
-    st.pyplot(fig_wedge)
-    st.success('Wedge modeling complete!')
+st.pyplot(fig_wedge)
+st.success('Wedge modeling complete!')
 
     
 
