@@ -1841,7 +1841,7 @@ if uploaded_file is not None:
             st.subheader("Display Parameters")
             min_plot_time = st.number_input("Min display time (s)", value=0.15)
             max_plot_time = st.number_input("Max display time (s)", value=0.3)
-            excursion = st.number_input("Trace excursion", value=0.5)
+            excursion = st.number_input("Trace excursion", value=2.5)
             
             # Generate synthetic data
             with st.spinner('Generating wedge model...'):
