@@ -1890,7 +1890,7 @@ if uploaded_file is not None:
         tuning_thickness = tuning_trace * dz_step
 
           # Create plots
-       fig_wedge = plt.figure(figsize=(12, 14))
+            fig_wedge = plt.figure(figsize=(12, 14))
        fig_wedge.set_facecolor('white')
        gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 1])
 
