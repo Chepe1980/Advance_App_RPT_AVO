@@ -1889,18 +1889,18 @@ if uploaded_file is not None:
         tuning_trace = np.argmax(np.abs(syn_zo.T)) % syn_zo.T.shape[1]
         tuning_thickness = tuning_trace * dz_step
 
-    # Create plots
-    fig_wedge = plt.figure(figsize=(12, 14))
-    fig_wedge.set_facecolor('white')
-    gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 1])
+          # Create plots
+         fig_wedge = plt.figure(figsize=(12, 14))
+         fig_wedge.set_facecolor('white')
+         gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 1])
 
-    ax0 = fig_wedge.add_subplot(gs[0])
-    ax0.plot(lyr_times[:,0], color='blue', lw=1.5)
-    ax0.plot(lyr_times[:,1], color='red', lw=1.5)
-    ax0.set_ylim((min_plot_time,max_plot_time))
-    ax0.invert_yaxis()
-    ax0.set_xlabel('Thickness (m)')
-    ax0.set_ylabel('Time (s)')
+         ax0 = fig_wedge.add_subplot(gs[0])
+         ax0.plot(lyr_times[:,0], color='blue', lw=1.5)
+         ax0.plot(lyr_times[:,1], color='red', lw=1.5)
+         ax0.set_ylim((min_plot_time,max_plot_time))
+         ax0.invert_yaxis()
+         ax0.set_xlabel('Thickness (m)')
+         ax0.set_ylabel('Time (s)')
     plt.text(2,
             min_plot_time + (lyr_times[0,0] - min_plot_time)/2.,
             'Layer 1',
