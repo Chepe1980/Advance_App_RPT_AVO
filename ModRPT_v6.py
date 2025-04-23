@@ -1788,96 +1788,95 @@ if uploaded_file is not None:
             
             st.pyplot(fig_avo_cross)
             # Add this to your sidebar (with other visualization options)
-            show_wedge_model = st.sidebar.checkbox("Show Wedge Modeling", value=False)
+show_wedge_model = st.sidebar.checkbox("Show Wedge Modeling", value=False)
 
-            # Add this after your AVO modeling section
-            if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
-               st.header("Seismic Wedge Modeling")
+# Add this after your AVO modeling section
+if show_wedge_model and uploaded_file is not None and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
+    st.header("Seismic Wedge Modeling")
     
-            # Use rock physics results as default values
-            default_vp = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VP_FRMMIX'].values.mean()
-            default_vs = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VS_FRMMIX'].values.mean()
-            default_rho = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'RHO_FRMMIX'].values.mean()
+    # Use rock physics results as default values
+    default_vp = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VP_FRMMIX'].values.mean()
+    default_vs = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VS_FRMMIX'].values.mean()
+    default_rho = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'RHO_FRMMIX'].values.mean()
     
-            # Get shale properties from above the sand
-            shale_vp = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VP'].values.mean()
-            shale_vs = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
-            shale_rho = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
+    # Get shale properties from above the sand
+    shale_vp = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VP'].values.mean()
+    shale_vs = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
+    shale_rho = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
     
-            # Wedge parameters
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.subheader("Layer 1 (Shale)")
-                vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
-                vs1 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs1")
-                rho1 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho1")
+    # Wedge parameters
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.subheader("Layer 1 (Shale)")
+        vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
+        vs1 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs1")
+        rho1 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho1")
 
-            with col2: # Indented this block to align with 'with col1:'
-               st.subheader("Layer 2 (Sand)")
-               vp2 = st.number_input("Vp (m/s)", value=default_vp, key="wedge_vp2")
-               vs2 = st.number_input("Vs (m/s)", value=default_vs, key="wedge_vs2")
-               rho2 = st.number_input("Density (g/cc)", value=default_rho, key="wedge_rho2")
+    with col2:
+        st.subheader("Layer 2 (Sand)")
+        vp2 = st.number_input("Vp (m/s)", value=default_vp, key="wedge_vp2")
+        vs2 = st.number_input("Vs (m/s)", value=default_vs, key="wedge_vs2")
+        rho2 = st.number_input("Density (g/cc)", value=default_rho, key="wedge_rho2")
 
-            with col3: # Indented this block to align with 'with col1:'
-               st.subheader("Layer 3 (Shale)")
-               vp3 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp3")
-               vs3 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs3")
-               rho3 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho3")
+    with col3:
+        st.subheader("Layer 3 (Shale)")
+        vp3 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp3")
+        vs3 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs3")
+        rho3 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho3")
     
-     
-            # Wedge geometry
-               st.subheader("Wedge Geometry")
-               dz_min, dz_max = st.slider("Thickness range (m)", 0.0, 100.0, (0.0, 60.0), 1.0)
-               dz_step = st.number_input("Thickness step (m)", value=1.0, min_value=0.1, max_value=10.0)
+    # Wedge geometry
+    st.subheader("Wedge Geometry")
+    dz_min, dz_max = st.slider("Thickness range (m)", 0.0, 100.0, (0.0, 60.0), 1.0)
+    dz_step = st.number_input("Thickness step (m)", value=1.0, min_value=0.1, max_value=10.0)
     
-           # Wavelet parameters (reuse from AVO section)
-               st.subheader("Wavelet Parameters")
-               wavelet_freq = st.number_input("Wavelet frequency (Hz)", value=wavelet_freq, min_value=10, max_value=100)
+    # Wavelet parameters (reuse from AVO section)
+    st.subheader("Wavelet Parameters")
+    wavelet_freq = st.number_input("Wavelet frequency (Hz)", value=wavelet_freq, min_value=10, max_value=100)
     
-           # Time parameters
-               st.subheader("Time Parameters")
-               tmin = st.number_input("Start time (s)", value=0.0)
-               tmax = st.number_input("End time (s)", value=0.5)
-               dt = st.number_input("Time step (s)", value=0.0001)
+    # Time parameters
+    st.subheader("Time Parameters")
+    tmin = st.number_input("Start time (s)", value=0.0)
+    tmax = st.number_input("End time (s)", value=0.5)
+    dt = st.number_input("Time step (s)", value=0.0001)
     
-           # Display parameters
-               st.subheader("Display Parameters")
-               min_plot_time = st.number_input("Min display time (s)", value=0.15)
-               max_plot_time = st.number_input("Max display time (s)", value=0.3)
-               excursion = st.number_input("Trace excursion", value=0.5)
+    # Display parameters
+    st.subheader("Display Parameters")
+    min_plot_time = st.number_input("Min display time (s)", value=0.15)
+    max_plot_time = st.number_input("Max display time (s)", value=0.3)
+    excursion = st.number_input("Trace excursion", value=0.5)
     
-           # Generate synthetic data
-            with st.spinner('Generating wedge model...'):
-                vp_mod = [vp1, vp2, vp3]
-                vs_mod = [vs1, vs2, vs3]
-                rho_mod = [rho1, rho2, rho3]
+    # Generate synthetic data
+    with st.spinner('Generating wedge model...'):
+        vp_mod = [vp1, vp2, vp3]
+        vs_mod = [vs1, vs2, vs3]
+        rho_mod = [rho1, rho2, rho3]
         
-                nlayers = len(vp_mod)
-                nint = nlayers - 1
-                nmodel = int((dz_max-dz_min)/dz_step+1)
+        nlayers = len(vp_mod)
+        nint = nlayers - 1
+        nmodel = int((dz_max-dz_min)/dz_step+1)
 
-           # Generate wavelet (reuse your ricker_wavelet function)
-            wvlt_t, wvlt_amp = ricker_wavelet(wavelet_freq)
-            wvlt_amp = wvlt_amp / np.max(np.abs(wvlt_amp))  # Normalize
+        # Generate wavelet (reuse your ricker_wavelet function)
+        wvlt_t, wvlt_amp = ricker_wavelet(wavelet_freq)
+        wvlt_amp = wvlt_amp / np.max(np.abs(wvlt_amp))  # Normalize
         
-            rc_int = calc_rc(vp_mod, rho_mod)
+        rc_int = calc_rc(vp_mod, rho_mod)
 
-            syn_zo = []
-            rc_zo = []
-            lyr_times = []
-            for model in range(0, nmodel):
-                z_int = [500.0]  # Fixed depth to first interface
-                z_int.append(z_int[0]+dz_min+dz_step*model)
-                t_int = calc_times(z_int, vp_mod)
-                lyr_times.append(t_int)
+        syn_zo = []
+        rc_zo = []
+        lyr_times = []
+        for model in range(0, nmodel):
+            z_int = [500.0]  # Fixed depth to first interface
+            z_int.append(z_int[0]+dz_min+dz_step*model)
+            t_int = calc_times(z_int, vp_mod)
+            lyr_times.append(t_int)
             
-                nsamp = int((tmax-tmin)/dt) + 1
-                t = []
+            nsamp = int((tmax-tmin)/dt) + 1
+            t = []
             for i in range(0,nsamp):
                 t.append(i*dt)
                 
-                rc = digitize_model(rc_int, t_int, t)
-                rc_zo.append(rc)
+            rc = digitize_model(rc_int, t_int, t)
+            rc_zo.append(rc)
             syn_buf = np.convolve(rc, wvlt_amp, mode='same')
             syn_buf = list(syn_buf)
             syn_zo.append(syn_buf)
@@ -1889,60 +1888,57 @@ if uploaded_file is not None:
         tuning_trace = np.argmax(np.abs(syn_zo.T)) % syn_zo.T.shape[1]
         tuning_thickness = tuning_trace * dz_step
 
-          # Create plots
-fig_wedge = plt.figure(figsize=(12, 14))
-fig_wedge.set_facecolor('white')
-gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 1])
+    # Create plots
+    fig_wedge = plt.figure(figsize=(12, 14))
+    fig_wedge.set_facecolor('white')
+    gs = gridspec.GridSpec(3, 1, height_ratios=[1, 1, 1])
 
-ax0 = fig_wedge.add_subplot(gs[0])
-ax0.plot(lyr_times[:,0], color='blue', lw=1.5)
-ax0.plot(lyr_times[:,1], color='red', lw=1.5)
-ax0.set_ylim((min_plot_time,max_plot_time))
-ax0.invert_yaxis()
-ax0.set_xlabel('Thickness (m)')
-ax0.set_ylabel('Time (s)')
-plt.text(2,
-            min_plot_time + (lyr_times[0,0] - min_plot_time)/2.,
-            'Layer 1',
-            fontsize=16)
-plt.text(dz_max/dz_step - 2,
-            lyr_times[-1,0] + (lyr_times[-1,1] - lyr_times[-1,0])/2.,
-            'Layer 2',
-            fontsize=16,
-            horizontalalignment='right')
-plt.text(2,
-            lyr_times[0,0] + (max_plot_time - lyr_times[0,0])/2.,
-            'Layer 3',
-            fontsize=16)
-plt.gca().xaxis.tick_top()
-plt.gca().xaxis.set_label_position('top')
-ax0.set_xlim((-excursion, nmodel+excursion))
+    ax0 = fig_wedge.add_subplot(gs[0])
+    ax0.plot(lyr_times[:,0], color='blue', lw=1.5)
+    ax0.plot(lyr_times[:,1], color='red', lw=1.5)
+    ax0.set_ylim((min_plot_time,max_plot_time))
+    ax0.invert_yaxis()
+    ax0.set_xlabel('Thickness (m)')
+    ax0.set_ylabel('Time (s)')
+    plt.text(2,
+             min_plot_time + (lyr_times[0,0] - min_plot_time)/2.,
+             'Layer 1',
+             fontsize=16)
+    plt.text(dz_max/dz_step - 2,
+             lyr_times[-1,0] + (lyr_times[-1,1] - lyr_times[-1,0])/2.,
+             'Layer 2',
+             fontsize=16,
+             horizontalalignment='right')
+    plt.text(2,
+             lyr_times[0,0] + (max_plot_time - lyr_times[0,0])/2.,
+             'Layer 3',
+             fontsize=16)
+    plt.gca().xaxis.tick_top()
+    plt.gca().xaxis.set_label_position('top')
+    ax0.set_xlim((-excursion, nmodel+excursion))
 
-ax1 = fig_wedge.add_subplot(gs[1])
-plot_vawig(ax1, syn_zo, t, excursion, highlight=tuning_trace)
-ax1.plot(lyr_times[:,0], color='blue', lw=1.5)
-ax1.plot(lyr_times[:,1], color='red', lw=1.5)
-ax1.set_ylim((min_plot_time,max_plot_time))
-ax1.invert_yaxis()
-ax1.set_xlabel('Thickness (m)')
-ax1.set_ylabel('Time (s)')
+    ax1 = fig_wedge.add_subplot(gs[1])
+    plot_vawig(ax1, syn_zo, t, excursion, highlight=tuning_trace)
+    ax1.plot(lyr_times[:,0], color='blue', lw=1.5)
+    ax1.plot(lyr_times[:,1], color='red', lw=1.5)
+    ax1.set_ylim((min_plot_time,max_plot_time))
+    ax1.invert_yaxis()
+    ax1.set_xlabel('Thickness (m)')
+    ax1.set_ylabel('Time (s)')
 
-ax2 = fig_wedge.add_subplot(gs[2])
-ax2.plot(syn_zo[:,lyr_indx[:,0]], color='blue')
-ax2.set_xlim((-excursion, nmodel+excursion))
-ax2.axvline(tuning_trace, color='k', lw=2)
-ax2.grid()
-ax2.set_title('Upper interface amplitude')
-ax2.set_xlabel('Thickness (m)')
-ax2.set_ylabel('Amplitude')
-plt.text(tuning_trace + 2,
-         plt.ylim()[0] * 1.1,
-         f'Tuning thickness = {tuning_thickness:.1f} m',
-         fontsize=16)
+    ax2 = fig_wedge.add_subplot(gs[2])
+    ax2.plot(syn_zo[:,lyr_indx[:,0]], color='blue')
+    ax2.set_xlim((-excursion, nmodel+excursion))
+    ax2.axvline(tuning_trace, color='k', lw=2)
+    ax2.grid()
+    ax2.set_title('Upper interface amplitude')
+    ax2.set_xlabel('Thickness (m)')
+    ax2.set_ylabel('Amplitude')
+    plt.text(tuning_trace + 2,
+             plt.ylim()[0] * 1.1,
+             f'Tuning thickness = {tuning_thickness:.1f} m',
+             fontsize=16)
 
-st.pyplot(fig_wedge)
-st.success('Wedge modeling complete!')
-
-    
-
-     
+    st.pyplot(fig_wedge)
+    st.success('Wedge modeling complete!')
+            
