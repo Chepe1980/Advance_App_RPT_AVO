@@ -1847,7 +1847,7 @@ if uploaded_file is not None:
                excursion = st.number_input("Trace excursion", value=0.5)
     
            # Generate synthetic data
-           with st.spinner('Generating wedge model...'):
+            with st.spinner('Generating wedge model...'):
                 vp_mod = [vp1, vp2, vp3]
                 vs_mod = [vs1, vs2, vs3]
                 rho_mod = [rho1, rho2, rho3]
