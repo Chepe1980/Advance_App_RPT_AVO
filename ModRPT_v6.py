@@ -1852,32 +1852,32 @@ if uploaded_file is not None:
                 vs_mod = [vs1, vs2, vs3]
                 rho_mod = [rho1, rho2, rho3]
         
-          nlayers = len(vp_mod)
-          nint = nlayers - 1
-        nmodel = int((dz_max-dz_min)/dz_step+1)
+                nlayers = len(vp_mod)
+                nint = nlayers - 1
+                nmodel = int((dz_max-dz_min)/dz_step+1)
 
-        # Generate wavelet (reuse your ricker_wavelet function)
-        wvlt_t, wvlt_amp = ricker_wavelet(wavelet_freq)
-        wvlt_amp = wvlt_amp / np.max(np.abs(wvlt_amp))  # Normalize
+           # Generate wavelet (reuse your ricker_wavelet function)
+            wvlt_t, wvlt_amp = ricker_wavelet(wavelet_freq)
+            wvlt_amp = wvlt_amp / np.max(np.abs(wvlt_amp))  # Normalize
         
-        rc_int = calc_rc(vp_mod, rho_mod)
+            rc_int = calc_rc(vp_mod, rho_mod)
 
-        syn_zo = []
-        rc_zo = []
-        lyr_times = []
-        for model in range(0, nmodel):
-            z_int = [500.0]  # Fixed depth to first interface
-            z_int.append(z_int[0]+dz_min+dz_step*model)
-            t_int = calc_times(z_int, vp_mod)
-            lyr_times.append(t_int)
+            syn_zo = []
+            rc_zo = []
+            lyr_times = []
+            for model in range(0, nmodel):
+                z_int = [500.0]  # Fixed depth to first interface
+                z_int.append(z_int[0]+dz_min+dz_step*model)
+                t_int = calc_times(z_int, vp_mod)
+                lyr_times.append(t_int)
             
-            nsamp = int((tmax-tmin)/dt) + 1
-            t = []
+                nsamp = int((tmax-tmin)/dt) + 1
+                t = []
             for i in range(0,nsamp):
                 t.append(i*dt)
                 
-            rc = digitize_model(rc_int, t_int, t)
-            rc_zo.append(rc)
+                rc = digitize_model(rc_int, t_int, t)
+                rc_zo.append(rc)
             syn_buf = np.convolve(rc, wvlt_amp, mode='same')
             syn_buf = list(syn_buf)
             syn_zo.append(syn_buf)
