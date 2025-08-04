@@ -12,6 +12,8 @@ scikit-learn
 seaborn
 lasio
 xgboost 
+plotly
+
 
 
 
