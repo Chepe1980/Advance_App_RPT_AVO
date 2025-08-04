@@ -422,9 +422,11 @@ def process_monte_carlo_chunk(logs, model_func, args):
     return chunk_results
 
 def create_interactive_crossplot(logs, depth_range=None):
-    """Create interactive crossplot using Bokeh"""
     if depth_range:
         logs = logs[(logs['DEPTH'] >= depth_range[0]) & (logs['DEPTH'] <= depth_range[1])]
+    
+    # Convert numeric factors to strings
+    logs['LFC_MIX'] = logs['LFC_MIX'].astype(str)  # Convert to strings
     
     source = ColumnDataSource(logs)
     palette = Category10[10]
@@ -432,20 +434,12 @@ def create_interactive_crossplot(logs, depth_range=None):
     p = figure(tools="pan,wheel_zoom,box_zoom,reset,hover,save",
                title="Interactive Crossplot")
     
-    cmap = factor_cmap('LFC_MIX', palette=palette, 
-                      factors=sorted(logs['LFC_MIX'].unique()))
+    # Use string factors
+    factors = sorted(logs['LFC_MIX'].unique().astype(str))
+    cmap = factor_cmap('LFC_MIX', palette=palette, factors=factors)
     
     p.scatter('IP_FRMMIX', 'VPVS_FRMMIX', size=8, source=source,
               color=cmap, alpha=0.6, legend_field='LFC_MIX')
-    
-    p.add_tools(HoverTool(tooltips=[
-        ("Depth", "@DEPTH"),
-        ("IP", "@IP_FRMMIX"),
-        ("Vp/Vs", "@VPVS_FRMMIX"),
-        ("RHO", "@RHO_FRMMIX")
-    ]))
-    
-    return p
 
 def create_interactive_3d_crossplot(logs, x_col='IP', y_col='VPVS', z_col='RHO', color_col='LFC_B'):
     """Create interactive 3D crossplot using Plotly"""
@@ -2178,3 +2172,4 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
+
