@@ -9,7 +9,7 @@ from io import BytesIO
 import base64
 from streamlit_bokeh_events import streamlit_bokeh_events
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, HoverTool, CustomJS
+from bokeh.models import ColumnDataSource, HoverTool
 from bokeh.palettes import Category10
 from bokeh.transform import factor_cmap
 import scipy.stats as stats
@@ -421,6 +421,32 @@ def process_monte_carlo_chunk(logs, model_func, args):
     
     return chunk_results
 
+def create_interactive_crossplot(logs, depth_range=None):
+    """Create interactive crossplot using Bokeh"""
+    if depth_range:
+        logs = logs[(logs['DEPTH'] >= depth_range[0]) & (logs['DEPTH'] <= depth_range[1])]
+    
+    source = ColumnDataSource(logs)
+    palette = Category10[10]
+    
+    p = figure(tools="pan,wheel_zoom,box_zoom,reset,hover,save",
+               title="Interactive Crossplot")
+    
+    cmap = factor_cmap('LFC_MIX', palette=palette, 
+                      factors=sorted(logs['LFC_MIX'].unique()))
+    
+    p.scatter('IP_FRMMIX', 'VPVS_FRMMIX', size=8, source=source,
+              color=cmap, alpha=0.6, legend_field='LFC_MIX')
+    
+    p.add_tools(HoverTool(tooltips=[
+        ("Depth", "@DEPTH"),
+        ("IP", "@IP_FRMMIX"),
+        ("Vp/Vs", "@VPVS_FRMMIX"),
+        ("RHO", "@RHO_FRMMIX")
+    ]))
+    
+    return p
+
 def create_interactive_3d_crossplot(logs, x_col='IP', y_col='VPVS', z_col='RHO', color_col='LFC_B'):
     """Create interactive 3D crossplot using Plotly"""
     # Define color mapping
@@ -606,26 +632,38 @@ def get_table_download_link(df, filename="results.csv"):
     href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">Download CSV File</a>'
     return href
 
-def plot_rpt_with_gassmann(title, fluid='gas'):
-    """Fixed RPT plotting function that handles shape mismatches"""
+def plot_rpt_with_gassmann(title, fluid='gas', 
+                         rho_qz=2.65, k_qz=37.0, mu_qz=44.0,
+                         rho_sh=2.81, k_sh=15.0, mu_sh=5.0,
+                         rho_b=1.09, k_b=2.8,
+                         rho_o=0.78, k_o=0.94,
+                         rho_g=0.25, k_g=0.06,
+                         phi_c=0.4, Cn=9, sigma=20,
+                         sw=0.8, so=0.15, sg=0.05,
+                         sand_cutoff=0.12):
+    """Enhanced RPT plotting with all parameters explicitly passed"""
     try:
+        if not rockphypy_available:
+            st.error("rockphypy package not available")
+            return
+        
         plt.figure(figsize=(8, 6))
         
-        # Model parameters (quartz)
-        D0, K0, G0 = 2.65, 36.6, 45
+        # Mineral properties
+        D0, K0, G0 = rho_qz, k_qz, mu_qz
         Db, Kb = rho_b, k_b
-        Do, Ko = rho_o, k_o
+        Do, Ko = rho_o, k_o  
         Dg, Kg = rho_g, k_g
         
-        # Porosity and saturation ranges for RPT
-        phi = np.linspace(0.1, rpt_phi_c, 10)
-        sw_rpt = np.linspace(0, 1, 5)  # Only for RPT background
+        # Porosity range
+        phi = np.linspace(0.1, phi_c, 10)
+        sw_rpt = np.linspace(0, 1, 5)
         
-        # Generate RPT background
-        if model_choice == "Soft Sand RPT (rockphypy)":
-            Kdry, Gdry = GM.softsand(K0, G0, phi, rpt_phi_c, rpt_Cn, rpt_sigma, f=0.5)
+        # Calculate dry rock moduli
+        if "Soft Sand" in title:
+            Kdry, Gdry = GM.softsand(K0, G0, phi, phi_c, Cn, sigma, f=0.5)
         else:
-            Kdry, Gdry = GM.stiffsand(K0, G0, phi, rpt_phi_c, rpt_Cn, rpt_sigma, f=0.5)
+            Kdry, Gdry = GM.stiffsand(K0, G0, phi, phi_c, Cn, sigma, f=0.5)
         
         # Plot RPT background
         if fluid == 'gas':
@@ -637,58 +675,9 @@ def plot_rpt_with_gassmann(title, fluid='gas'):
             D_mix = (Do * so + Dg * sg) / (so + sg + 1e-10)
             QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, K_mix, D_mix, phi, sw_rpt)
         
-        plt.title(f"{model_choice.split(' ')[0]} RPT - {fluid.capitalize()} Case")
+        plt.title(f"{title} - {fluid.capitalize()} Case")
         
-        # Process Gassmann results separately
-        if uploaded_file is not None:
-            try:
-                # Get previously processed data (no reprocessing needed)
-                logs_gassmann = logs.copy()
-                
-                # Filter sand intervals only
-                sand_mask = logs_gassmann['VSH'] <= sand_cutoff
-                
-                # Select properties based on fluid case
-                if fluid == 'gas':
-                    ip = logs_gassmann.loc[sand_mask, 'IP_FRMG'].values
-                    vpvs = logs_gassmann.loc[sand_mask, 'VPVS_FRMG'].values
-                    color = 'red'
-                    label = 'Gassmann Gas'
-                elif fluid == 'oil':
-                    ip = logs_gassmann.loc[sand_mask, 'IP_FRMO'].values
-                    vpvs = logs_gassmann.loc[sand_mask, 'VPVS_FRMO'].values
-                    color = 'green'
-                    label = 'Gassmann Oil'
-                else:  # mixed
-                    ip = logs_gassmann.loc[sand_mask, 'IP_FRMMIX'].values
-                    vpvs = logs_gassmann.loc[sand_mask, 'VPVS_FRMMIX'].values
-                    color = 'magenta'
-                    label = f'Gassmann Mixed (Sw={sw:.2f}, So={so:.2f})'
-                
-                # Plot individual points if data exists
-                if len(ip) > 0 and len(vpvs) > 0:
-                    plt.scatter(ip, vpvs, c=color, s=20, alpha=0.3, label=f'{label} Points')
-                    
-                    # Calculate and plot mean values
-                    mean_ip = np.mean(ip)
-                    mean_vpvs = np.mean(vpvs)
-                    plt.scatter(mean_ip, mean_vpvs, c='black', s=200, marker='X', 
-                                label=f'{label} Mean', edgecolors='white', linewidths=1)
-                    
-                    # Add text annotation for mean values
-                    plt.text(mean_ip, mean_vpvs, 
-                            f'Mean:\nIP={mean_ip:.0f}\nVp/Vs={mean_vpvs:.2f}',
-                            ha='left', va='bottom', fontsize=8,
-                            bbox=dict(facecolor='white', alpha=0.8))
-                    
-                    plt.legend()
-                else:
-                    st.warning(f"No valid {fluid} sand points found for plotting")
-                
-            except Exception as e:
-                st.warning(f"Error plotting Gassmann points: {str(e)}")
-        
-        # Finalize plot
+        # Save and display plot
         buf = BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
         buf.seek(0)
@@ -730,55 +719,55 @@ with st.sidebar:
     with st.expander("Mineral Properties"):
         col1, col2 = st.columns(2)
         with col1:
-            rho_qz = st.number_input("Quartz Density (g/cc)", value=2.65, step=0.01)
-            k_qz = st.number_input("Quartz Bulk Modulus (GPa)", value=37.0, step=0.1)
-            mu_qz = st.number_input("Quartz Shear Modulus (GPa)", value=44.0, step=0.1)
+            rho_qz = st.number_input("Quartz Density (g/cc)", value=2.65, step=0.01, key="rho_qz")
+            k_qz = st.number_input("Quartz Bulk Modulus (GPa)", value=37.0, step=0.1, key="k_qz")
+            mu_qz = st.number_input("Quartz Shear Modulus (GPa)", value=44.0, step=0.1, key="mu_qz")
         with col2:
-            rho_sh = st.number_input("Shale Density (g/cc)", value=2.81, step=0.01)
-            k_sh = st.number_input("Shale Bulk Modulus (GPa)", value=15.0, step=0.1)
-            mu_sh = st.number_input("Shale Shear Modulus (GPa)", value=5.0, step=0.1)
+            rho_sh = st.number_input("Shale Density (g/cc)", value=2.81, step=0.01, key="rho_sh")
+            k_sh = st.number_input("Shale Bulk Modulus (GPa)", value=15.0, step=0.1, key="k_sh")
+            mu_sh = st.number_input("Shale Shear Modulus (GPa)", value=5.0, step=0.1, key="mu_sh")
     
     # Additional parameters for selected models
     if model_choice == "Critical Porosity Model (Nur)":
-        critical_porosity = st.slider("Critical Porosity (φc)", 0.3, 0.5, 0.4, 0.01)
+        critical_porosity = st.slider("Critical Porosity (φc)", 0.3, 0.5, 0.4, 0.01, key="phi_c")
     elif model_choice in ["Contact Theory (Hertz-Mindlin)", "Dvorkin-Nur Soft Sand Model"]:
-        coordination_number = st.slider("Coordination Number", 6, 12, 9)
-        effective_pressure = st.slider("Effective Pressure (MPa)", 1, 50, 10)
+        coordination_number = st.slider("Coordination Number", 6, 12, 9, key="Cn")
+        effective_pressure = st.slider("Effective Pressure (MPa)", 1, 50, 10, key="P")
         if model_choice == "Dvorkin-Nur Soft Sand Model":
-            critical_porosity = st.slider("Critical Porosity (φc)", 0.3, 0.5, 0.4, 0.01)
+            critical_porosity = st.slider("Critical Porosity (φc)", 0.3, 0.5, 0.4, 0.01, key="phi_c_sand")
     elif model_choice == "Xu-Payne Laminated Model":
-        lamination_factor = st.slider("Lamination Factor (c)", 0.1, 2.0, 1.0, 0.1)
+        lamination_factor = st.slider("Lamination Factor (c)", 0.1, 2.0, 1.0, 0.1, key="c")
     elif model_choice == "Greenberg-Castagna Empirical":
-        lithology_type = st.selectbox("Lithology Type", ['sandstone', 'shale', 'carbonate', 'dolomite'])
+        lithology_type = st.selectbox("Lithology Type", ['sandstone', 'shale', 'carbonate', 'dolomite'], key="lithology")
     
     # Rockphypy specific parameters
     if model_choice in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
         st.subheader("RPT Model Parameters")
-        rpt_phi_c = st.slider("RPT Critical Porosity", 0.3, 0.5, 0.4, 0.01)
-        rpt_Cn = st.slider("RPT Coordination Number", 6.0, 12.0, 8.6, 0.1)
-        rpt_sigma = st.slider("RPT Effective Stress (MPa)", 1, 50, 20)
+        rpt_phi_c = st.slider("RPT Critical Porosity", 0.3, 0.5, 0.4, 0.01, key="rpt_phi_c")
+        rpt_Cn = st.slider("RPT Coordination Number", 6.0, 12.0, 8.6, 0.1, key="rpt_Cn")
+        rpt_sigma = st.slider("RPT Effective Stress (MPa)", 1, 50, 20, key="rpt_sigma")
     
     # Fluid properties with uncertainty ranges
     with st.expander("Fluid Properties"):
         col1, col2, col3 = st.columns(3)
         with col1:
             st.markdown("**Brine**")
-            rho_b = st.number_input("Brine Density (g/cc)", value=1.09, step=0.01)
-            k_b = st.number_input("Brine Bulk Modulus (GPa)", value=2.8, step=0.1)
-            rho_b_std = st.number_input("Brine Density Std Dev", value=0.05, step=0.01, min_value=0.0)
-            k_b_std = st.number_input("Brine Bulk Modulus Std Dev", value=0.1, step=0.01, min_value=0.0)
+            rho_b = st.number_input("Brine Density (g/cc)", value=1.09, step=0.01, key="rho_b")
+            k_b = st.number_input("Brine Bulk Modulus (GPa)", value=2.8, step=0.1, key="k_b")
+            rho_b_std = st.number_input("Brine Density Std Dev", value=0.05, step=0.01, min_value=0.0, key="rho_b_std")
+            k_b_std = st.number_input("Brine Bulk Modulus Std Dev", value=0.1, step=0.01, min_value=0.0, key="k_b_std")
         with col2:
             st.markdown("**Oil**")
-            rho_o = st.number_input("Oil Density (g/cc)", value=0.78, step=0.01)
-            k_o = st.number_input("Oil Bulk Modulus (GPa)", value=0.94, step=0.1)
-            rho_o_std = st.number_input("Oil Density Std Dev", value=0.05, step=0.01, min_value=0.0)
-            k_o_std = st.number_input("Oil Bulk Modulus Std Dev", value=0.05, step=0.01, min_value=0.0)
+            rho_o = st.number_input("Oil Density (g/cc)", value=0.78, step=0.01, key="rho_o")
+            k_o = st.number_input("Oil Bulk Modulus (GPa)", value=0.94, step=0.1, key="k_o")
+            rho_o_std = st.number_input("Oil Density Std Dev", value=0.05, step=0.01, min_value=0.0, key="rho_o_std")
+            k_o_std = st.number_input("Oil Bulk Modulus Std Dev", value=0.05, step=0.01, min_value=0.0, key="k_o_std")
         with col3:
             st.markdown("**Gas**")
-            rho_g = st.number_input("Gas Density (g/cc)", value=0.25, step=0.01)
-            k_g = st.number_input("Gas Bulk Modulus (GPa)", value=0.06, step=0.01)
-            rho_g_std = st.number_input("Gas Density Std Dev", value=0.02, step=0.01, min_value=0.0)
-            k_g_std = st.number_input("Gas Bulk Modulus Std Dev", value=0.01, step=0.01, min_value=0.0)
+            rho_g = st.number_input("Gas Density (g/cc)", value=0.25, step=0.01, key="rho_g")
+            k_g = st.number_input("Gas Bulk Modulus (GPa)", value=0.06, step=0.01, key="k_g")
+            rho_g_std = st.number_input("Gas Density Std Dev", value=0.02, step=0.01, min_value=0.0, key="rho_g_std")
+            k_g_std = st.number_input("Gas Bulk Modulus Std Dev", value=0.01, step=0.01, min_value=0.0, key="k_g_std")
     
     # Saturation controls
     with st.expander("Saturation Settings"):
@@ -786,14 +775,15 @@ with st.sidebar:
         so_default = 0.15
         sg_default = 0.05
         
-        sw = st.slider("Water Saturation (Sw)", 0.0, 1.0, sw_default, 0.01)
+        sw = st.slider("Water Saturation (Sw)", 0.0, 1.0, sw_default, 0.01, key="sw")
         remaining = max(0.0, 1.0 - sw)  # Ensure remaining is never negative
         so = st.slider(
             "Oil Saturation (So)", 
             0.0, 
             remaining, 
             min(so_default, remaining) if remaining > 0 else 0.0, 
-            0.01
+            0.01,
+            key="so"
         )
         sg = remaining - so
         
@@ -802,44 +792,45 @@ with st.sidebar:
     
     # AVO modeling parameters
     with st.expander("AVO Modeling Parameters"):
-        min_angle = st.slider("Minimum Angle (deg)", 0, 10, 0)
-        max_angle = st.slider("Maximum Angle (deg)", 30, 50, 45)
-        angle_step = st.slider("Angle Step (deg)", 1, 5, 1)
-        wavelet_freq = st.slider("Wavelet Frequency (Hz)", 20, 80, 50)
-        sand_cutoff = st.slider("Sand Cutoff (VSH)", 0.0, 0.3, 0.12, step=0.01)
+        min_angle = st.slider("Minimum Angle (deg)", 0, 10, 0, key="avo_min_angle")
+        max_angle = st.slider("Maximum Angle (deg)", 30, 50, 45, key="avo_max_angle")
+        angle_step = st.slider("Angle Step (deg)", 1, 5, 1, key="angle_step")
+        wavelet_freq = st.slider("Wavelet Frequency (Hz)", 20, 80, 50, key="wavelet_freq")
+        sand_cutoff = st.slider("Sand Cutoff (VSH)", 0.0, 0.3, 0.12, step=0.01, key="sand_cutoff")
     
     # Time-Frequency Analysis Parameters
     with st.expander("Time-Frequency Analysis"):
-        cwt_scales = st.slider("CWT Scales Range", 1, 100, (1, 50))
-        cwt_wavelet = st.selectbox("CWT Wavelet", ['morl', 'cmor', 'gaus', 'mexh'], index=0)
+        cwt_scales = st.slider("CWT Scales Range", 1, 100, (1, 50), key="cwt_scales")
+        cwt_wavelet = st.selectbox("CWT Wavelet", ['morl', 'cmor', 'gaus', 'mexh'], index=0, key="cwt_wavelet")
     
     # Monte Carlo parameters
     with st.expander("Uncertainty Analysis"):
-        mc_iterations = st.slider("Monte Carlo Iterations", 10, 1000, 100)
-        parallel_processing = st.checkbox("Use parallel processing", value=True)
-        include_uncertainty = st.checkbox("Include Uncertainty Analysis", value=False)
+        mc_iterations = st.slider("Monte Carlo Iterations", 10, 1000, 100, key="mc_iterations")
+        parallel_processing = st.checkbox("Use parallel processing", value=True, key="parallel_processing")
+        include_uncertainty = st.checkbox("Include Uncertainty Analysis", value=False, key="include_uncertainty")
     
     # Visualization options
     with st.expander("Visualization Options"):
-        selected_cmap = st.selectbox("Color Map", seismic_colormaps, index=0)
-        show_3d_crossplot = st.checkbox("Show 3D Crossplot", value=False)
-        show_interactive_3d = st.checkbox("Show Interactive 3D Plot", value=True)
-        show_histograms = st.checkbox("Show Histograms", value=True)
-        show_smith_gidlow = st.checkbox("Show Smith-Gidlow AVO Attributes", value=True)
-        show_wedge_model = st.checkbox("Show Wedge Modeling", value=False)
+        selected_cmap = st.selectbox("Color Map", seismic_colormaps, index=0, key="colormap")
+        show_3d_crossplot = st.checkbox("Show 3D Crossplot", value=False, key="show_3d_crossplot")
+        show_interactive_3d = st.checkbox("Show Interactive 3D Plot", value=True, key="show_interactive_3d")
+        show_histograms = st.checkbox("Show Histograms", value=True, key="show_histograms")
+        show_smith_gidlow = st.checkbox("Show Smith-Gidlow AVO Attributes", value=True, key="show_smith_gidlow")
+        show_wedge_model = st.checkbox("Show Wedge Modeling", value=False, key="show_wedge_model")
     
     # Advanced Modules
     with st.expander("Advanced Modules"):
-        predict_sonic = st.checkbox("Enable Sonic Log Prediction", value=False)
+        predict_sonic = st.checkbox("Enable Sonic Log Prediction", value=False, key="predict_sonic")
         if predict_sonic:
             ml_model = st.selectbox("ML Model", 
                                   ["Random Forest", "XGBoost", "Gaussian Process", "Neural Network"],
-                                  index=0)
-        inversion_feasibility = st.checkbox("Enable Seismic Inversion Feasibility", value=False)
+                                  index=0,
+                                  key="ml_model")
+        inversion_feasibility = st.checkbox("Enable Seismic Inversion Feasibility", value=False, key="inversion_feasibility")
     
     # File upload
     with st.expander("Data Input"):
-        uploaded_file = st.file_uploader("Upload CSV or LAS file", type=["csv", "las"])
+        uploaded_file = st.file_uploader("Upload CSV or LAS file", type=["csv", "las"], key="file_uploader")
         if uploaded_file:
             st.success("File uploaded successfully!")
 
@@ -862,16 +853,25 @@ def process_data(uploaded_file, model_choice, include_uncertainty=False, mc_iter
         # Handle both CSV and LAS files
         uploaded_file.seek(0)
         if uploaded_file.name.endswith('.las'):
-            las = lasio.read(uploaded_file)
-            logs = las.df()
-            logs['DEPTH'] = logs.index
+            try:
+                las = lasio.read(uploaded_file)
+                logs = las.df()
+                logs['DEPTH'] = logs.index
+            except Exception as e:
+                st.error(f"Failed to read LAS file: {str(e)}")
+                return None, None
         else:
-            logs = pd.read_csv(uploaded_file)
+            try:
+                logs = pd.read_csv(uploaded_file)
+            except Exception as e:
+                st.error(f"Failed to read CSV file: {str(e)}")
+                return None, None
     
     required_columns = {'DEPTH', 'VP', 'VS', 'RHO', 'VSH', 'SW', 'PHI'}
     if not required_columns.issubset(logs.columns):
         missing = required_columns - set(logs.columns)
-        raise ValueError(f"Missing required columns: {missing}")
+        st.error(f"Missing required columns: {missing}")
+        return None, None
     
     # Get saturations from kwargs
     sw = kwargs.get('sw', 0.8)
@@ -997,7 +997,7 @@ def process_data(uploaded_file, model_choice, include_uncertainty=False, mc_iter
         vpb, vsb, rhob, kb = model_func(rho_b, k_b, rho_b, k_b, k0, mu0, logs.PHI)
         vpo, vso, rhoo, ko = model_func(rho_b, k_b, rho_o, k_o, k0, mu0, logs.PHI)
         vpg, vsg, rhog, kg = model_func(rho_b, k_b, rho_g, k_g, k0, mu0, logs.PHI)
-        vp_mix, vs_mix, rho_mix, _ = model_func(rho_b, k_b, rho_fl, k_fl, k0, mu0, logs.PHI)
+        vp_mix, vs_mix, _ = model_func(rho_b, k_b, rho_fl, k_fl, k0, mu0, logs.PHI)
     elif model_choice == "Xu-Payne Laminated Model":
         lamination_factor = kwargs.get('lamination_factor', 1.0)
         vpb, vsb, rhob, kb = model_func(rho_b, k_b, rho_b, k_b, k0, mu0, logs.PHI, logs.VSH, lamination_factor)
@@ -1099,13 +1099,18 @@ if uploaded_file is not None:
             lithology_type=lithology_type if 'lithology_type' in locals() else None
         )
         
+        if logs is None:
+            st.error("Data processing failed - check your input data")
+            st.stop()
+        
         # Depth range selection
         st.header("Well Log Visualization")
         ztop, zbot = st.slider(
             "Select Depth Range", 
             float(logs.DEPTH.min()), 
             float(logs.DEPTH.max()), 
-            (float(logs.DEPTH.min()), float(logs.DEPTH.max()))
+            (float(logs.DEPTH.min()), float(logs.DEPTH.max())),
+            key="depth_range"
         )
         
         # Visualization
@@ -1168,10 +1173,11 @@ if uploaded_file is not None:
             features = st.multiselect(
                 "Select features for prediction",
                 logs.columns.tolist(),
-                default=default_features
+                default=default_features,
+                key="sonic_features"
             )
             
-            if st.button("Train Prediction Models") and features:
+            if st.button("Train Prediction Models", key="train_models") and features:
                 with st.spinner("Training VP/VS prediction models..."):
                     prediction_results = predict_sonic_logs(logs, features, model_type=ml_model)
                     
@@ -1197,7 +1203,7 @@ if uploaded_file is not None:
                             st.pyplot(fig_imp)
                         
                         # Apply predictions to missing intervals
-                        if st.checkbox("Apply predictions to missing intervals"):
+                        if st.checkbox("Apply predictions to missing intervals", key="apply_predictions"):
                             missing_vp = logs.VP.isna()
                             missing_vs = logs.VS.isna()
                             
@@ -1306,7 +1312,7 @@ if uploaded_file is not None:
         
         # Original 2D crossplots (now including mixed case) with depth filtering
         st.header("2D Crossplots")
-        fig2, ax2 = plt.subplots(nrows=1, ncols=5, figsize=(25, 4))  # Added column for mixed case
+        fig2, ax2 = plt.subplots(1, 5, figsize=(25, 4))  # Added column for mixed case
         
         # Filter data based on depth range
         filtered_logs = logs[(logs['DEPTH'] >= ztop) & (logs['DEPTH'] <= zbot)]
@@ -1846,15 +1852,81 @@ if uploaded_file is not None:
             
             # Display Gas Case RPT with Gassmann points
             st.subheader("Gas Case RPT with Gassmann Fluid Substitution")
-            plot_rpt_with_gassmann("Gas Case RPT", fluid='gas')
+            plot_rpt_with_gassmann(
+                model_choice.split(' ')[0],
+                fluid='gas',
+                rho_qz=rho_qz,
+                k_qz=k_qz,
+                mu_qz=mu_qz,
+                rho_sh=rho_sh,
+                k_sh=k_sh,
+                mu_sh=mu_sh,
+                rho_b=rho_b,
+                k_b=k_b,
+                rho_o=rho_o,
+                k_o=k_o,
+                rho_g=rho_g,
+                k_g=k_g,
+                phi_c=rpt_phi_c,
+                Cn=rpt_Cn,
+                sigma=rpt_sigma,
+                sw=sw,
+                so=so,
+                sg=sg,
+                sand_cutoff=sand_cutoff
+            )
             
             # Display Oil Case RPT with Gassmann points
             st.subheader("Oil Case RPT with Gassmann Fluid Substitution")
-            plot_rpt_with_gassmann("Oil Case RPT", fluid='oil')
+            plot_rpt_with_gassmann(
+                model_choice.split(' ')[0],
+                fluid='oil',
+                rho_qz=rho_qz,
+                k_qz=k_qz,
+                mu_qz=mu_qz,
+                rho_sh=rho_sh,
+                k_sh=k_sh,
+                mu_sh=mu_sh,
+                rho_b=rho_b,
+                k_b=k_b,
+                rho_o=rho_o,
+                k_o=k_o,
+                rho_g=rho_g,
+                k_g=k_g,
+                phi_c=rpt_phi_c,
+                Cn=rpt_Cn,
+                sigma=rpt_sigma,
+                sw=sw,
+                so=so,
+                sg=sg,
+                sand_cutoff=sand_cutoff
+            )
             
             # Display Mixed Case RPT with Gassmann points
             st.subheader("Mixed Case RPT with Gassmann Fluid Substitution")
-            plot_rpt_with_gassmann("Mixed Case RPT", fluid='mixed')
+            plot_rpt_with_gassmann(
+                model_choice.split(' ')[0],
+                fluid='mixed',
+                rho_qz=rho_qz,
+                k_qz=k_qz,
+                mu_qz=mu_qz,
+                rho_sh=rho_sh,
+                k_sh=k_sh,
+                mu_sh=mu_sh,
+                rho_b=rho_b,
+                k_b=k_b,
+                rho_o=rho_o,
+                k_o=k_o,
+                rho_g=rho_g,
+                k_g=k_g,
+                phi_c=rpt_phi_c,
+                Cn=rpt_Cn,
+                sigma=rpt_sigma,
+                sw=sw,
+                so=so,
+                sg=sg,
+                sand_cutoff=sand_cutoff
+            )
 
         # Uncertainty Analysis Results
         if include_uncertainty and mc_results and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
@@ -1957,14 +2029,14 @@ if uploaded_file is not None:
             st.header("Seismic Wedge Modeling")
             
             # Use rock physics results as default values
-            default_vp = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VP_FRMMIX'].values.mean()
-            default_vs = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'VS_FRMMIX'].values.mean()
-            default_rho = logs.loc[(logs.DEPTH >= middle_top) & (logs.DEPTH <= middle_bot), 'RHO_FRMMIX'].values.mean()
+            default_vp = logs.loc[(logs['DEPTH'] >= middle_top) & (logs['DEPTH'] <= middle_bot), 'VP_FRMMIX'].values.mean()
+            default_vs = logs.loc[(logs['DEPTH'] >= middle_top) & (logs['DEPTH'] <= middle_bot), 'VS_FRMMIX'].values.mean()
+            default_rho = logs.loc[(logs['DEPTH'] >= middle_top) & (logs['DEPTH'] <= middle_bot), 'RHO_FRMMIX'].values.mean()
             
             # Get shale properties from above the sand
-            shale_vp = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VP'].values.mean()
-            shale_vs = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
-            shale_rho = logs.loc[(logs.DEPTH >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
+            shale_vp = logs.loc[(logs['DEPTH'] >= middle_top - (middle_bot-middle_top)), 'VP'].values.mean()
+            shale_vs = logs.loc[(logs['DEPTH'] >= middle_top - (middle_bot-middle_top)), 'VS'].values.mean()
+            shale_rho = logs.loc[(logs['DEPTH'] >= middle_top - (middle_bot-middle_top)), 'RHO'].values.mean()
             
             # Wedge parameters
             col1, col2, col3 = st.columns(3)
@@ -1988,24 +2060,24 @@ if uploaded_file is not None:
             
             # Wedge geometry
             st.subheader("Wedge Geometry")
-            dz_min, dz_max = st.slider("Thickness range (m)", 0.0, 100.0, (0.0, 60.0), 1.0)
-            dz_step = st.number_input("Thickness step (m)", value=1.0, min_value=0.1, max_value=10.0)
+            dz_min, dz_max = st.slider("Thickness range (m)", 0.0, 100.0, (0.0, 60.0), 1.0, key="wedge_thickness")
+            dz_step = st.number_input("Thickness step (m)", value=1.0, min_value=0.1, max_value=10.0, key="wedge_step")
             
             # Wavelet parameters (reuse from AVO section)
             st.subheader("Wavelet Parameters")
-            wavelet_freq = st.number_input("Wavelet frequency (Hz)", value=wavelet_freq, min_value=10, max_value=100)
+            wavelet_freq = st.number_input("Wavelet frequency (Hz)", value=wavelet_freq, min_value=10, max_value=100, key="wedge_wavelet_freq")
             
             # Time parameters
             st.subheader("Time Parameters")
-            tmin = st.number_input("Start time (s)", value=0.0)
-            tmax = st.number_input("End time (s)", value=0.5)
-            dt = st.number_input("Time step (s)", value=0.0001)
+            tmin = st.number_input("Start time (s)", value=0.0, key="wedge_tmin")
+            tmax = st.number_input("End time (s)", value=0.5, key="wedge_tmax")
+            dt = st.number_input("Time step (s)", value=0.0001, key="wedge_dt")
             
             # Display parameters
             st.subheader("Display Parameters")
-            min_plot_time = st.number_input("Min display time (s)", value=0.15)
-            max_plot_time = st.number_input("Max display time (s)", value=0.3)
-            excursion = st.number_input("Trace excursion", value=2.5)
+            min_plot_time = st.number_input("Min display time (s)", value=0.15, key="wedge_min_time")
+            max_plot_time = st.number_input("Max display time (s)", value=0.3, key="wedge_max_time")
+            excursion = st.number_input("Trace excursion", value=2.5, key="wedge_excursion")
             
             # Generate synthetic data
             with st.spinner('Generating wedge model...'):
