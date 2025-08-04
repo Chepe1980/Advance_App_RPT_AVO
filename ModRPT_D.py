@@ -442,7 +442,6 @@ def create_interactive_crossplot(logs, depth_range=None):
               color=cmap, alpha=0.6, legend_field='LFC_MIX')
 
 def create_interactive_3d_crossplot(logs, x_col='IP', y_col='VPVS', z_col='RHO', color_col='LFC_B'):
-    """Create interactive 3D crossplot using Plotly"""
     # Define color mapping
     color_map = {
         0: 'gray',    # Undefined
@@ -479,7 +478,7 @@ def create_interactive_3d_crossplot(logs, x_col='IP', y_col='VPVS', z_col='RHO',
                     "<extra></extra>"
             ))
     
-    # Update layout
+    # Update layout with valid scene properties
     fig.update_layout(
         scene=dict(
             xaxis_title=x_col,
@@ -488,8 +487,8 @@ def create_interactive_3d_crossplot(logs, x_col='IP', y_col='VPVS', z_col='RHO',
             xaxis=dict(backgroundcolor="rgb(200, 200, 230)"),
             yaxis=dict(backgroundcolor="rgb(230, 200, 230)"),
             zaxis=dict(backgroundcolor="rgb(230, 230, 200)"),
-            gridcolor="rgb(255, 255, 255)",
-            hovermode='closest'
+            # Removed invalid gridcolor property
+            bgcolor="rgb(255, 255, 255)",  # This is the correct way to set background
         ),
         margin=dict(l=0, r=0, b=0, t=30),
         height=800,
@@ -2172,4 +2171,5 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
+
 
