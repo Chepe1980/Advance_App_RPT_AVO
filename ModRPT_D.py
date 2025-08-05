@@ -257,6 +257,136 @@ def calculate_reflection_coefficients(vp1, vp2, vs1, vs2, rho1, rho2, angle):
     
     rc = a*(dvp/vp_avg) + b*(dvs/vs_avg) + c*(drho/rho_avg)
     return rc
+def run_wedge_model():
+    st.header("Seismic Wedge Modeling")
+    
+    # Get default values from rock physics results
+    default_vp = logs.loc[(logs['DEPTH'] >= middle_top) & (logs['DEPTH'] <= middle_bot), 'VP_FRMMIX'].mean()
+    default_vs = logs.loc[(logs['DEPTH'] >= middle_top) & (logs['DEPTH'] <= middle_bot), 'VS_FRMMIX'].mean()
+    default_rho = logs.loc[(logs['DEPTH'] >= middle_top) & (logs['DEPTH'] <= middle_bot), 'RHO_FRMMIX'].mean()
+    
+    # Get shale properties
+    shale_vp = logs.loc[(logs['DEPTH'] >= middle_top - (middle_bot-middle_top)), 'VP'].mean()
+    shale_vs = logs.loc[(logs['DEPTH'] >= middle_top - (middle_bot-middle_top)), 'VS'].mean()
+    shale_rho = logs.loc[(logs['DEPTH'] >= middle_top - (middle_bot-middle_top)), 'RHO'].mean()
+    
+    # Widgets for parameters
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.subheader("Layer 1 (Shale)")
+        vp1 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp1")
+        vs1 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs1")
+        rho1 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho1")
+
+    with col2:
+        st.subheader("Layer 2 (Sand)")
+        vp2 = st.number_input("Vp (m/s)", value=default_vp, key="wedge_vp2")
+        vs2 = st.number_input("Vs (m/s)", value=default_vs, key="wedge_vs2")
+        rho2 = st.number_input("Density (g/cc)", value=default_rho, key="wedge_rho2")
+
+    with col3:
+        st.subheader("Layer 3 (Shale)")
+        vp3 = st.number_input("Vp (m/s)", value=shale_vp, key="wedge_vp3")
+        vs3 = st.number_input("Vs (m/s)", value=shale_vs, key="wedge_vs3")
+        rho3 = st.number_input("Density (g/cc)", value=shale_rho, key="wedge_rho3")
+    
+    # Wedge parameters
+    st.subheader("Wedge Geometry")
+    dz_min, dz_max = st.slider("Thickness range (m)", 0.0, 100.0, (0.0, 60.0), 1.0, key="wedge_thickness")
+    dz_step = st.number_input("Thickness step (m)", value=1.0, min_value=0.1, max_value=10.0, key="wedge_step")
+    
+    # Wavelet parameters
+    st.subheader("Wavelet Parameters")
+    wavelet_freq = st.number_input("Wavelet frequency (Hz)", 
+                                 value=30, min_value=10, max_value=100, 
+                                 key="wedge_wavelet_freq")
+    wavelet_length = st.number_input("Wavelet length (s)", 
+                                   value=0.128, min_value=0.05, max_value=0.5,
+                                   key="wedge_wavelet_length")
+    
+    # Time parameters
+    st.subheader("Time Parameters")
+    tmin = st.number_input("Start time (s)", value=0.0, key="wedge_tmin")
+    tmax = st.number_input("End time (s)", value=0.5, key="wedge_tmax")
+    dt = st.number_input("Time step (s)", value=0.0001, key="wedge_dt")
+    
+    if st.button("Run Wedge Model"):
+        with st.spinner('Generating wedge model...'):
+            # Generate proper Ricker wavelet
+            wvlt_t, wvlt_amp = ricker_wavelet(wavelet_freq, length=wavelet_length, dt=dt)
+            wvlt_amp = wvlt_amp / np.max(np.abs(wvlt_amp))  # Normalize
+            
+            # Model parameters
+            vp_mod = [vp1, vp2, vp3]
+            rho_mod = [rho1, rho2, rho3]
+            rc_int = calc_rc(vp_mod, rho_mod)
+            
+            # Initialize results
+            nmodel = int((dz_max-dz_min)/dz_step + 1)
+            nsamp = int((tmax-tmin)/dt) + 1
+            t = np.arange(tmin, tmax+dt, dt)
+            syn_zo = np.zeros((nmodel, nsamp))
+            
+            # Generate models
+            for model in range(nmodel):
+                thickness = dz_min + dz_step * model
+                z_int = [500.0, 500.0 + thickness]  # Top at 500m, variable thickness
+                
+                # Calculate reflection times
+                t_int = [z_int[0]/vp1, z_int[0]/vp1 + 2*thickness/vp2]
+                
+                # Create reflectivity series
+                rc = np.zeros(nsamp)
+                for i, t_val in enumerate(t):
+                    if t_val >= t_int[0] and t_val < t_int[1]:
+                        rc[i] = rc_int[0]
+                    elif t_val >= t_int[1]:
+                        rc[i] = rc_int[1]
+                
+                # Convolve with wavelet
+                syn_zo[model] = np.convolve(rc, wvlt_amp, mode='same')
+            
+            # Plot results
+            plot_wedge_results(t, syn_zo, dz_min, dz_step, nmodel, wvlt_amp)
+
+def plot_wedge_results(t, syn_zo, dz_min, dz_step, nmodel, wavelet):
+    """Plot the wedge model results"""
+    fig = plt.figure(figsize=(15, 10))
+    gs = gridspec.GridSpec(3, 1, height_ratios=[1, 2, 1])
+    
+    # Plot wavelet
+    ax0 = fig.add_subplot(gs[0])
+    ax0.plot(wavelet, 'b-', lw=2)
+    ax0.set_title(f"Wavelet ({wavelet_freq} Hz)")
+    ax0.set_xlabel("Samples")
+    ax0.grid(True)
+    
+    # Plot wedge
+    ax1 = fig.add_subplot(gs[1])
+    extent = [0, nmodel*dz_step+dz_min, t[-1], t[0]]
+    ax1.imshow(syn_zo.T, aspect='auto', extent=extent,
+              cmap='seismic', vmin=-np.max(np.abs(syn_zo)), 
+              vmax=np.max(np.abs(syn_zo)))
+    ax1.set_xlabel("Wedge Thickness (m)")
+    ax1.set_ylabel("Time (s)")
+    ax1.set_title("Synthetic Wedge Model")
+    
+    # Plot amplitude vs thickness
+    ax2 = fig.add_subplot(gs[2])
+    tuning_thickness = (vp2/wavelet_freq)/2  # Theoretical tuning thickness
+    ax2.plot(np.arange(nmodel)*dz_step + dz_min, 
+            syn_zo[:, int(len(t)/2)], 'b-')
+    ax2.axvline(tuning_thickness, color='r', linestyle='--')
+    ax2.set_xlabel("Wedge Thickness (m)")
+    ax2.set_ylabel("Amplitude")
+    ax2.grid(True)
+    ax2.set_title(f"Amplitude at t = {t[int(len(t)/2)]:.2f}s (Tuning = {tuning_thickness:.1f}m)")
+    
+    st.pyplot(fig)
+
+
+
+
 
 def fit_avo_curve(angles, rc_values):
     """Fit a line to AVO response to get intercept and gradient"""
@@ -2184,6 +2314,7 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
+
 
 
 
