@@ -642,23 +642,32 @@ def plot_rpt_with_gassmann(title, fluid='gas',
         
         plt.figure(figsize=(10, 8))
         
-        # Create colormap for facies
+        # 1. Calculate dry rock properties using rockphypy
+        phi = np.linspace(0.01, phi_c, 20)  # Porosity range
+        
+        # Calculate dry rock moduli using soft sand or stiff sand model
+        if "Soft Sand" in title:
+            Kdry, Gdry = GM.softsand(k_qz, mu_qz, phi, phi_c, Cn, sigma)
+        else:
+            Kdry, Gdry = GM.stiffsand(k_qz, mu_qz, phi, phi_c, Cn, sigma)
+        
+        # 2. Create colormap for facies
         ccc = ['#B3B3B3','blue','green','red','magenta','#996633']
         cmap_facies = colors.ListedColormap(ccc[0:6], 'indexed')
         
-        # 1. Plot RPT background
+        # 3. Plot RPT background
         if fluid == 'gas':
-            QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, Kg, Dg, phi, sw_rpt)
+            QI.plot_rpt(Kdry, Gdry, k_qz, rho_qz, k_b, rho_b, k_g, rho_g, phi, np.linspace(0,1,5))
         elif fluid == 'oil':
-            QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, Ko, Do, phi, sw_rpt)
+            QI.plot_rpt(Kdry, Gdry, k_qz, rho_qz, k_b, rho_b, k_o, rho_o, phi, np.linspace(0,1,5))
         else:  # mixed
-            K_mix = (Ko * so + Kg * sg) / (so + sg + 1e-10)
-            D_mix = (Do * so + Dg * sg) / (so + sg + 1e-10)
-            QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, K_mix, D_mix, phi, sw_rpt)
+            K_mix = (k_o * so + k_g * sg) / (so + sg + 1e-10)
+            D_mix = (rho_o * so + rho_g * sg) / (so + sg + 1e-10)
+            QI.plot_rpt(Kdry, Gdry, k_qz, rho_qz, k_b, rho_b, K_mix, D_mix, phi, np.linspace(0,1,5))
         
-        # 2. Plot actual data points if logs exist
-        if 'logs' in globals():
-            # Convert units to GPa if needed
+        # 4. Plot actual data points if logs exist
+        if 'logs' in globals() and all(col in logs.columns for col in ['K_DRY', 'G_DRY', 'LFC_MIX']):
+            # Convert units to GPa if needed (assuming logs are in Pa)
             k_dry = logs['K_DRY'] / 1e9
             g_dry = logs['G_DRY'] / 1e9
             
@@ -684,7 +693,6 @@ def plot_rpt_with_gassmann(title, fluid='gas',
         
     except Exception as e:
         st.error(f"Error generating RPT plot: {str(e)}")
-
 # ==============================================
 # Main Application with Enhanced Features
 # ==============================================
@@ -2176,6 +2184,7 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
+
 
 
 
