@@ -631,7 +631,7 @@ def plot_rpt_with_gassmann(title, fluid='gas',
                          rho_b=1.09, k_b=2.8,
                          rho_o=0.78, k_o=0.94,
                          rho_g=0.25, k_g=0.06,
-                         phi_c=0.4, Cn=9, sigma=20,
+                         phi_c=0.4, Cn=9, sigma=20, f=0.5,
                          sw=0.8, so=0.15, sg=0.05,
                          sand_cutoff=0.12):
     """Enhanced RPT plotting with data points"""
@@ -645,11 +645,11 @@ def plot_rpt_with_gassmann(title, fluid='gas',
         # 1. Calculate dry rock properties using rockphypy
         phi = np.linspace(0.01, phi_c, 20)  # Porosity range
         
-        # Calculate dry rock moduli using soft sand or stiff sand model
+        # Calculate dry rock moduli
         if "Soft Sand" in title:
-            Kdry, Gdry = GM.softsand(k_qz, mu_qz, phi, phi_c, Cn, sigma)
+            Kdry, Gdry = GM.softsand(k_qz, mu_qz, phi, phi_c, Cn, sigma, f=f)
         else:
-            Kdry, Gdry = GM.stiffsand(k_qz, mu_qz, phi, phi_c, Cn, sigma)
+            Kdry, Gdry = GM.stiffsand(k_qz, mu_qz, phi, phi_c, Cn, sigma, f=f)
         
         # 2. Create colormap for facies
         ccc = ['#B3B3B3','blue','green','red','magenta','#996633']
@@ -2184,6 +2184,7 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
+
 
 
 
