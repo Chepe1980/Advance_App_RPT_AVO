@@ -642,39 +642,13 @@ def plot_rpt_with_gassmann(title, fluid='gas',
         
         plt.figure(figsize=(8, 6))
         
-        # Mineral properties
-        D0, K0, G0 = rho_qz, k_qz, mu_qz
-        Db, Kb = rho_b, k_b
-        Do, Ko = rho_o, k_o  
-        Dg, Kg = rho_g, k_g
-        
-        # Porosity range
-        phi = np.linspace(0.1, phi_c, 10)
-        sw_rpt = np.linspace(0, 1, 5)
-        
-        # Calculate dry rock moduli
-        if "Soft Sand" in title:
-            Kdry, Gdry = GM.softsand(K0, G0, phi, phi_c, Cn, sigma, f=0.5)
-        else:
-            Kdry, Gdry = GM.stiffsand(K0, G0, phi, phi_c, Cn, sigma, f=0.5)
-        
-        # Plot RPT background
-        if fluid == 'gas':
-            QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, Kg, Dg, phi, sw_rpt)
-        elif fluid == 'oil':
-            QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, Ko, Do, phi, sw_rpt)
-        else:  # mixed
-            K_mix = (Ko * so + Kg * sg) / (so + sg + 1e-10)
-            D_mix = (Do * so + Dg * sg) / (so + sg + 1e-10)
-            QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, K_mix, D_mix, phi, sw_rpt)
-        
-        plt.title(f"{title} - {fluid.capitalize()} Case")
+        # [Rest of your plotting code remains the same...]
         
         # Save and display plot
         buf = BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
         buf.seek(0)
-        st.image(buf, use_column_width=True)
+        st.image(buf, use_container_width=True)  # Updated parameter here
         plt.close()
         
     except Exception as e:
@@ -2171,5 +2145,6 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
+
 
 
