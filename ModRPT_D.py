@@ -634,31 +634,19 @@ def plot_rpt_with_gassmann(title, fluid='gas',
                          phi_c=0.4, Cn=9, sigma=20,
                          sw=0.8, so=0.15, sg=0.05,
                          sand_cutoff=0.12):
-    """Enhanced RPT plotting with all parameters explicitly passed"""
+    """Enhanced RPT plotting with data points"""
     try:
         if not rockphypy_available:
             st.error("rockphypy package not available")
             return
         
-        plt.figure(figsize=(8, 6))
+        plt.figure(figsize=(10, 8))
         
-        # Mineral properties
-        D0, K0, G0 = rho_qz, k_qz, mu_qz
-        Db, Kb = rho_b, k_b
-        Do, Ko = rho_o, k_o  
-        Dg, Kg = rho_g, k_g
+        # Create colormap for facies
+        ccc = ['#B3B3B3','blue','green','red','magenta','#996633']
+        cmap_facies = colors.ListedColormap(ccc[0:6], 'indexed')
         
-        # Porosity range
-        phi = np.linspace(0.1, phi_c, 10)
-        sw_rpt = np.linspace(0, 1, 5)
-        
-        # Calculate dry rock moduli
-        if "Soft Sand" in title:
-            Kdry, Gdry = GM.softsand(K0, G0, phi, phi_c, Cn, sigma, f=0.5)
-        else:
-            Kdry, Gdry = GM.stiffsand(K0, G0, phi, phi_c, Cn, sigma, f=0.5)
-        
-        # Plot RPT background
+        # 1. Plot RPT background
         if fluid == 'gas':
             QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, Kg, Dg, phi, sw_rpt)
         elif fluid == 'oil':
@@ -668,13 +656,30 @@ def plot_rpt_with_gassmann(title, fluid='gas',
             D_mix = (Do * so + Dg * sg) / (so + sg + 1e-10)
             QI.plot_rpt(Kdry, Gdry, K0, D0, Kb, Db, K_mix, D_mix, phi, sw_rpt)
         
+        # 2. Plot actual data points if logs exist
+        if 'logs' in globals():
+            # Convert units to GPa if needed
+            k_dry = logs['K_DRY'] / 1e9
+            g_dry = logs['G_DRY'] / 1e9
+            
+            plt.scatter(k_dry, g_dry, c=logs['LFC_MIX'], 
+                       cmap=cmap_facies, s=50, 
+                       edgecolors='k', alpha=0.7,
+                       vmin=0, vmax=5)
+            
+            # Add colorbar for facies
+            cbar = plt.colorbar()
+            cbar.set_label('Fluid Type')
+            cbar.set_ticks([0.5, 1.5, 2.5, 3.5, 4.5])
+            cbar.set_ticklabels(['Undef','Brine','Oil','Gas','Mixed','Shale'])
+        
         plt.title(f"{title} - {fluid.capitalize()} Case")
         
-        # Save and display plot
+        # Save and display
         buf = BytesIO()
         plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
         buf.seek(0)
-        st.image(buf, use_container_width=True)  # Updated parameter here
+        st.image(buf, use_container_width=True)
         plt.close()
         
     except Exception as e:
@@ -2171,6 +2176,7 @@ if uploaded_file is not None:
 
     except Exception as e:
         st.error(f"Error processing data: {str(e)}")
+
 
 
 
