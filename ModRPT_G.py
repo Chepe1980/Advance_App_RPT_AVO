@@ -149,7 +149,7 @@ def critical_porosity_model(vp1: float, vs1: float, rho1: float, rho_f1: float, 
     k_s2 = kdry + (1-(kdry/k0))**2/((phi/k_f2)+((1-phi)/k0)-(kdry/k0**2))
     rho2 = rho1-phi*rho_f1+phi*rho_f2
     mu2 = mudry  # Shear modulus not affected by fluid in Gassmann
-    vp2 = np.sqrt((k_s2+(4./3)*mu2)/rho2
+    vp2 = np.sqrt((k_s2+(4./3)*mu2)/rho2)
     vs2 = np.sqrt(mu2/rho2)
     
     return vp2*1000, vs2*1000, rho2, k_s2
