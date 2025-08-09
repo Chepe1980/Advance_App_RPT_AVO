@@ -733,6 +733,7 @@ def plot_rpt_with_gassmann(title: str, fluid: str = 'gas',
     except Exception as e:
         logger.error(f"Error generating RPT plot: {str(e)}")
         st.error(f"Error generating RPT plot: {str(e)}")
+
 @st.cache_data
 def process_data(
     uploaded_file, 
@@ -859,11 +860,11 @@ def process_data(
             logs[f'IP_{case}'] = logs[vp_col] * logs[rho_col]
             logs[f'VPVS_{case}'] = logs[vp_col] / logs[vs_col]
             
-            # Create litho-fluid classes
+            # Create litho-fluid classes - FIXED SYNTAX HERE
             lfc_map = {'B': 1, 'O': 2, 'G': 3, 'MIX': 4}
             logs[f'LFC_{case[-1]}'] = np.select(
                 [logs.VSH < sand_cutoff, logs.VSH >= sand_cutoff],
-                [lfc_map.get(case[-1], 5],  # 5 = shale
+                [lfc_map.get(case[-1], 5), 5],  # 5 = shale
                 default=0
             )
         
@@ -880,8 +881,6 @@ def process_data(
         st.error(f"Error processing CSV data: {str(e)}")
         logger.error(f"CSV processing failed: {str(e)}")
         return None, None
-
-
 
 
 
