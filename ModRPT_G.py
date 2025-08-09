@@ -791,7 +791,7 @@ def process_data(
             st.info("Detected columns: " + ", ".join(logs.columns))
             return None, None
         
-        # Convert units if needed (assuming input is in common oilfield units)
+        # Convert units if needed
         if logs.VP.mean() < 1000:  # Probably in km/s
             logs['VP'] = logs.VP * 1000  # Convert to m/s
         if logs.VS.mean() < 1000:
@@ -829,46 +829,62 @@ def process_data(
         
         # Process each fluid case
         for case, params in cases.items():
-            # Create new columns
             vp_col = f'VP_{case}'
             vs_col = f'VS_{case}'
             rho_col = f'RHO_{case}'
             
-            # Apply selected model
-            if model_choice == "Gassmann's Fluid Substitution":
-                results = logs.apply(lambda row: frm(
-                    row.VP, row.VS, row.RHO,
-                    1.0, 2.25,  # Original fluid properties
-                    params['rho_f'], params['k_f'],
-                    k_qz, mu_qz, row.PHI
-                ), axis=1, result_type='expand')
-                
-            elif model_choice == "Critical Porosity Model (Nur)":
-                results = logs.apply(lambda row: critical_porosity_model(
-                    row.VP, row.VS, row.RHO,
-                    1.0, 2.25,
-                    params['rho_f'], params['k_f'],
-                    k_qz, mu_qz, row.PHI, critical_porosity
-                ), axis=1, result_type='expand')
+            # Initialize result arrays
+            vp_results = np.zeros(len(logs))
+            vs_results = np.zeros(len(logs))
+            rho_results = np.zeros(len(logs))
             
-            # [Add other model cases similarly...]
+            # Process each row individually
+            for i in range(len(logs)):
+                try:
+                    if model_choice == "Gassmann's Fluid Substitution":
+                        vp, vs, rho, _ = frm(
+                            logs.VP.iloc[i], logs.VS.iloc[i], logs.RHO.iloc[i],
+                            1.0, 2.25,  # Original fluid properties
+                            params['rho_f'], params['k_f'],
+                            k_qz, mu_qz, logs.PHI.iloc[i]
+                        )
+                    elif model_choice == "Critical Porosity Model (Nur)":
+                        vp, vs, rho, _ = critical_porosity_model(
+                            logs.VP.iloc[i], logs.VS.iloc[i], logs.RHO.iloc[i],
+                            1.0, 2.25,
+                            params['rho_f'], params['k_f'],
+                            k_qz, mu_qz, logs.PHI.iloc[i], critical_porosity
+                        )
+                    # Add other model cases here...
+                    
+                    vp_results[i] = vp
+                    vs_results[i] = vs
+                    rho_results[i] = rho
+                    
+                except Exception as e:
+                    st.warning(f"Error processing sample {i} for {case}: {str(e)}")
+                    vp_results[i] = np.nan
+                    vs_results[i] = np.nan
+                    rho_results[i] = np.nan
             
             # Store results
-            logs[vp_col], logs[vs_col], logs[rho_col], _ = zip(*results)
+            logs[vp_col] = vp_results
+            logs[vs_col] = vs_results
+            logs[rho_col] = rho_results
             
             # Calculate derived properties
             logs[f'IP_{case}'] = logs[vp_col] * logs[rho_col]
             logs[f'VPVS_{case}'] = logs[vp_col] / logs[vs_col]
             
-            # Create litho-fluid classes - FIXED SYNTAX HERE
-            lfc_map = {'B': 1, 'O': 2, 'G': 3, 'MIX': 4}
-            logs[f'LFC_{case[-1]}'] = np.select(
-                [logs.VSH < sand_cutoff, logs.VSH >= sand_cutoff],
-                [lfc_map.get(case[-1], 5), 5],  # 5 = shale
-                default=0
+            # Create litho-fluid classes
+            lfc_value = {'B': 1, 'O': 2, 'G': 3, 'MIX': 4}.get(case[-1], 0)
+            logs[f'LFC_{case[-1]}'] = np.where(
+                logs.VSH < sand_cutoff,
+                lfc_value,
+                5  # Shale
             )
         
-        # Calculate original properties if not present
+        # Calculate original properties
         logs['IP'] = logs.VP * logs.RHO
         logs['VPVS'] = logs.VP / logs.VS
         
@@ -881,9 +897,6 @@ def process_data(
         st.error(f"Error processing CSV data: {str(e)}")
         logger.error(f"CSV processing failed: {str(e)}")
         return None, None
-
-
-
 
 
 
