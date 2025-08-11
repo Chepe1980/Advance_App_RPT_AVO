@@ -475,7 +475,6 @@ def create_interactive_3d_crossplot(logs: pd.DataFrame, x_col: str = 'IP', y_col
         5: 'brown'    # Shale
     }
     
-    # Rest of the function remains the same
     fig = go.Figure()
     
     for class_val, color in color_map.items():
@@ -938,6 +937,21 @@ def process_data(
 # ==============================================
 
 def main():
+    # Define color maps at the top level to avoid scope issues
+    case_colors = {
+        'B': 'blue',
+        'O': 'green',
+        'G': 'red',
+        'MIX': 'magenta'
+    }
+    
+    hist_colors = {
+        'B': 'blue',
+        'O': 'green',
+        'G': 'red',
+        'MIX': 'magenta'
+    }
+    
     # Sidebar for input parameters
     with st.sidebar:
         st.header("Model Configuration")
@@ -1372,14 +1386,6 @@ def main():
                     fig3d = plt.figure(figsize=(10, 8))
                     ax3d = fig3d.add_subplot(111, projection='3d')
                     
-                    # Define colors for each case
-                    case_colors = {
-                        'B': 'blue',
-                        'O': 'green',
-                        'G': 'red',
-                        'MIX': 'magenta'
-                    }
-                    
                     for case in ['B', 'O', 'G', 'MIX']:
                         mask = filtered_logs[f'LFC_{case}'] == int(case == 'B')*1 + int(case == 'O')*2 + int(case == 'G')*3 + int(case == 'MIX')*4
                         ax3d.scatter(
@@ -1400,14 +1406,6 @@ def main():
                 if show_histograms and model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
                     st.header("Property Distributions")
                     fig_hist, ax_hist = plt.subplots(2, 2, figsize=(12, 8))
-                    
-                    # Define colors for each case
-                    hist_colors = {
-                        'B': 'blue',
-                        'O': 'green',
-                        'G': 'red',
-                        'MIX': 'magenta'
-                    }
                     
                     ax_hist[0,0].hist(filtered_logs.IP_FRMB, bins=30, alpha=0.5, label='Brine', color=hist_colors['B'])
                     ax_hist[0,0].hist(filtered_logs.IP_FRMO, bins=30, alpha=0.5, label='Oil', color=hist_colors['O'])
@@ -1534,11 +1532,10 @@ def main():
                         
                         # Plot intercept vs gradient
                         fig_sg, ax_sg = plt.subplots(figsize=(8, 6))
-                        colors = {'Brine': 'blue', 'Oil': 'green', 'Gas': 'red', 'Mixed': 'magenta'}
                         
                         for idx, row in avo_df.iterrows():
                             ax_sg.scatter(row['Intercept'], row['Gradient'], 
-                                         color=colors[row['Case']], s=100, label=row['Case'])
+                                         color=case_colors[row['Case'][0]], s=100, label=row['Case'])
                             ax_sg.text(row['Intercept'], row['Gradient'], row['Case'], 
                                       fontsize=9, ha='right', va='bottom')
                         
@@ -1562,7 +1559,7 @@ def main():
                         st.subheader("Fluid Factor Analysis")
                         fig_ff, ax_ff = plt.subplots(figsize=(8, 4))
                         ax_ff.bar(avo_df['Case'], avo_df['Fluid_Factor'], 
-                                 color=[colors[c] for c in avo_df['Case']])
+                                 color=[case_colors[c[0]] for c in avo_df['Case']])
                         ax_ff.set_ylabel('Fluid Factor')
                         ax_ff.set_title('Fluid Factor by Fluid Type')
                         ax_ff.grid(True)
@@ -2076,93 +2073,6 @@ def main():
                     ax_avo_cross.set_ylim(-0.3, 0.3)
                     
                     st.pyplot(fig_avo_cross)
-                    
-                    # Get the depth range from the slider
-                    rpt_depth_range = st.session_state.get('rpt_depth_range', (1000.0, 3000.0))
-                    
-                    # Gas Case
-                    st.subheader("Gas Case RPT")
-                    plot_rpt_with_gassmann(
-                        model_choice.split(' ')[0],
-                        fluid='gas',
-                        rho_qz=rho_qz,
-                        k_qz=k_qz,
-                        mu_qz=mu_qz,
-                        rho_sh=rho_sh,
-                        k_sh=k_sh,
-                        mu_sh=mu_sh,
-                        rho_b=rho_b,
-                        k_b=k_b,
-                        rho_o=rho_o,
-                        k_o=k_o,
-                        rho_g=rho_g,
-                        k_g=k_g,
-                        phi_c=rpt_phi_c,
-                        Cn=rpt_Cn,
-                        sigma=rpt_sigma,
-                        sw=sw,
-                        so=so,
-                        sg=sg,
-                        sand_cutoff=sand_cutoff,
-                        depth_range=rpt_depth_range,
-                        logs=logs
-                    )
-                    
-                    # Oil Case
-                    st.subheader("Oil Case RPT")
-                    plot_rpt_with_gassmann(
-                        model_choice.split(' ')[0],
-                        fluid='oil',
-                        rho_qz=rho_qz,
-                        k_qz=k_qz,
-                        mu_qz=mu_qz,
-                        rho_sh=rho_sh,
-                        k_sh=k_sh,
-                        mu_sh=mu_sh,
-                        rho_b=rho_b,
-                        k_b=k_b,
-                        rho_o=rho_o,
-                        k_o=k_o,
-                        rho_g=rho_g,
-                        k_g=k_g,
-                        phi_c=rpt_phi_c,
-                        Cn=rpt_Cn,
-                        sigma=rpt_sigma,
-                        sw=sw,
-                        so=so,
-                        sg=sg,
-                        sand_cutoff=sand_cutoff,
-                        depth_range=rpt_depth_range,
-                        logs=logs
-                    )
-                    
-                    # Mixed Case
-                    st.subheader("Mixed Case RPT")
-                    plot_rpt_with_gassmann(
-                        model_choice.split(' ')[0],
-                        fluid='mixed',
-                        rho_qz=rho_qz,
-                        k_qz=k_qz,
-                        mu_qz=mu_qz,
-                        rho_sh=rho_sh,
-                        k_sh=k_sh,
-                        mu_sh=mu_sh,
-                        rho_b=rho_b,
-                        k_b=k_b,
-                        rho_o=rho_o,
-                        k_o=k_o,
-                        rho_g=rho_g,
-                        k_g=k_g,
-                        phi_c=rpt_phi_c,
-                        Cn=rpt_Cn,
-                        sigma=rpt_sigma,
-                        sw=sw,
-                        so=so,
-                        sg=sg,
-                        sand_cutoff=sand_cutoff,
-                        depth_range=rpt_depth_range,
-                        logs=logs
-                    )
 
         except Exception as e:
             logger.error(f"Error in main processing: {str(e)}")
