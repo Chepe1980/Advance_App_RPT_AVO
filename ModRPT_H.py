@@ -823,11 +823,12 @@ def process_data(
         k_mix = 1/(sw/k_b + so/k_o + sg/k_g) if (sw+so+sg) > 0 else 0
         
         # Define fluid cases
-        cases = {
-            'FRMB': {'rho_f': rho_b, 'k_f': k_b},
-            'FRMO': {'rho_f': rho_o, 'k_f': k_o},
-            'FRMG': {'rho_f': rho_g, 'k_f': k_g},
-            'FRMMIX': {'rho_f': rho_mix, 'k_f': k_mix}
+        # Create a mapping of case to LFC column names
+        lfc_columns = {
+            'FRMB': 'LFC_B',
+            'FRMO': 'LFC_O', 
+            'FRMG': 'LFC_G',
+            'FRMMIX': 'LFC_MIX'
         }
         
         # Process each fluid case
@@ -836,21 +837,18 @@ def process_data(
             vs_col = f'VS_{case}'
             rho_col = f'RHO_{case}'
             
+            
             # Initialize result arrays
             vp_results = np.zeros(len(logs))
             vs_results = np.zeros(len(logs))
             rho_results = np.zeros(len(logs))
-
-                # Create litho-fluid classes
-            lfc_value = {'B': 1, 'O': 2, 'G': 3, 'MIX': 4}.get(case[-1], 0)
-            lfc_col_name = 'LFC_MIX' if case == 'FRMMIX' else f'LFC_{case[-1]}'  # Added missing }
-    
-            logs[lfc_col_name] = np.where(
+                # Create LFC column
+            lfc_col = lfc_columns[case]
+            logs[lfc_col] = np.where(
                 logs.VSH < sand_cutoff,
-                lfc_value,
-                5  # Shale
-           )
-
+                {'FRMB': 1, 'FRMO': 2, 'FRMG': 3, 'FRMMIX': 4}[case],
+                 5  # Shale
+            )
 
 
 
