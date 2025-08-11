@@ -457,6 +457,14 @@ def create_interactive_crossplot(logs: pd.DataFrame, depth_range: Tuple[float, f
     if depth_range:
         logs = logs[(logs['DEPTH'] >= depth_range[0]) & (logs['DEPTH'] <= depth_range[1])]
     
+    # Check if required columns exist
+    required_cols = ['IP_FRMMIX', 'VPVS_FRMMIX', 'LFC_MIX']
+    missing_cols = [col for col in required_cols if col not in logs.columns]
+    
+    if missing_cols:
+        st.warning(f"Cannot create crossplot - missing columns: {', '.join(missing_cols)}")
+        return None
+    
     # Convert numeric factors to strings
     logs['LFC_MIX'] = logs['LFC_MIX'].astype(str)  # Convert to strings
     
