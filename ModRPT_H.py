@@ -961,7 +961,15 @@ def main():
         4: 'magenta', # Mixed
         5: 'brown'    # Shale
     }
-    
+        # For example, in the create_interactive_3d_crossplot function call:
+    fig_3d = create_interactive_3d_crossplot(
+        logs[(logs['DEPTH'] >= ztop) & (logs['DEPTH'] <= zbot)],
+        x_col='IP_FRMMIX',
+        y_col='VPVS_FRMMIX',
+        z_col='RHO_FRMMIX',
+        color_col='LFC_MIX',
+        color_map=color_map_3d  # Pass the color map as parameter
+    )
     # Sidebar for input parameters
     with st.sidebar:
         st.header("Model Configuration")
