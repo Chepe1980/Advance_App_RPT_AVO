@@ -38,6 +38,21 @@ from tqdm import tqdm
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Constants
+SEISMIC_COLORMAPS = ['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma']
+CASE_COLORS = {'B': 'blue', 'O': 'green', 'G': 'red', 'MIX': 'magenta'}
+HIST_COLORS = {'B': 'blue', 'O': 'green', 'G': 'red', 'MIX': 'magenta'}
+COLOR_MAP_3D = {
+    0: 'gray',    # Undefined
+    1: 'blue',    # Brine
+    2: 'green',   # Oil
+    3: 'red',     # Gas
+    4: 'magenta', # Mixed
+    5: 'brown'    # Shale
+}
+CCC = ['#B3B3B3','blue','green','red','magenta','#996633']
+CMAP_FACIES = colors.ListedColormap(CCC[0:len(CCC)], 'indexed')
+
 # Import rockphypy with error handling
 try:
     from rockphypy import QI, GM, Fluid
@@ -55,9 +70,6 @@ st.markdown("""
 This app performs advanced rock physics modeling and AVO analysis with multiple models, 
 visualization options, uncertainty analysis, sonic log prediction, and seismic inversion feasibility assessment.
 """)
-
-# Available colormaps for seismic displays
-seismic_colormaps = ['seismic', 'RdBu', 'bwr', 'coolwarm', 'viridis', 'plasma']
 
 # ==============================================
 # Data Models for Parameter Validation
@@ -465,19 +477,9 @@ def create_interactive_crossplot(logs: pd.DataFrame, depth_range: Tuple[float, f
 def create_interactive_3d_crossplot(logs: pd.DataFrame, x_col: str = 'IP', y_col: str = 'VPVS',
                                    z_col: str = 'RHO', color_col: str = 'LFC_B') -> go.Figure:
     """Create interactive 3D crossplot with Plotly"""
-    # Define color mapping first
-    color_map = {
-        0: 'gray',    # Undefined
-        1: 'blue',    # Brine
-        2: 'green',   # Oil
-        3: 'red',     # Gas
-        4: 'magenta', # Mixed
-        5: 'brown'    # Shale
-    }
-    
     fig = go.Figure()
     
-    for class_val, color in color_map.items():
+    for class_val, color in COLOR_MAP_3D.items():
         mask = logs[color_col] == class_val
         if mask.any():
             fig.add_trace(go.Scatter3d(
@@ -543,16 +545,16 @@ def predict_sonic_logs(logs: pd.DataFrame, features: List[str], target_vp: str =
         X_test_scaled = scaler.transform(X_test)
         
         # Select model
-        if model_type == 'Random Forest':
+        if model_type == "Random Forest":
             vp_model = RandomForestRegressor(n_estimators=100, random_state=42)
             vs_model = RandomForestRegressor(n_estimators=100, random_state=42)
-        elif model_type == 'XGBoost':
+        elif model_type == "XGBoost":
             vp_model = XGBRegressor(n_estimators=100, random_state=42)
             vs_model = XGBRegressor(n_estimators=100, random_state=42)
-        elif model_type == 'Gaussian Process':
+        elif model_type == "Gaussian Process":
             vp_model = GaussianProcessRegressor(random_state=42)
             vs_model = GaussianProcessRegressor(random_state=42)
-        elif model_type == 'Neural Network':
+        elif model_type == "Neural Network":
             vp_model = MLPRegressor(hidden_layer_sizes=(100,50), random_state=42, max_iter=500)
             vs_model = MLPRegressor(hidden_layer_sizes=(100,50), random_state=42, max_iter=500)
         else:
@@ -675,11 +677,7 @@ def plot_rpt_with_gassmann(title: str, fluid: str = 'gas',
         else:
             Kdry, Gdry = GM.stiffsand(k_qz, mu_qz, phi, phi_c, Cn, sigma, f=f)
         
-        # 2. Create colormap for facies
-        ccc = ['#B3B3B3','blue','green','red','magenta','#996633']
-        cmap_facies = colors.ListedColormap(ccc[0:6], 'indexed')
-        
-        # 3. Plot RPT background
+        # 2. Plot RPT background
         if fluid == 'gas':
             QI.plot_rpt(Kdry, Gdry, k_qz, rho_qz, k_b, rho_b, k_g, rho_g, phi, np.linspace(0,1,5))
         elif fluid == 'oil':
@@ -689,7 +687,7 @@ def plot_rpt_with_gassmann(title: str, fluid: str = 'gas',
             D_mix = (rho_o * so + rho_g * sg) / (so + sg + 1e-10)
             QI.plot_rpt(Kdry, Gdry, k_qz, rho_qz, k_b, rho_b, K_mix, D_mix, phi, np.linspace(0,1,5))
         
-        # 4. Plot actual data points from logs if available
+        # 3. Plot actual data points from logs if available
         if logs is not None and all(col in logs.columns for col in ['VP_FRMMIX', 'VS_FRMMIX', 'RHO_FRMMIX', 'LFC_MIX']):
             # Filter logs by depth range if specified
             if depth_range:
@@ -706,7 +704,7 @@ def plot_rpt_with_gassmann(title: str, fluid: str = 'gas',
             
             # Plot the points with facies coloring
             scatter = plt.scatter(ip_mix_km, vpvs_mix_km, c=lfc, 
-                                cmap=cmap_facies, s=50, 
+                                cmap=CMAP_FACIES, s=50, 
                                 edgecolors='k', alpha=0.7,
                                 vmin=0, vmax=5)
             
@@ -937,32 +935,6 @@ def process_data(
 # ==============================================
 
 def main():
-    # Define color maps at the top level of main() to ensure they're always available
-    case_colors = {
-        'B': 'blue',
-        'O': 'green',
-        'G': 'red',
-        'MIX': 'magenta'
-    }
-    
-    hist_colors = {
-        'B': 'blue',
-        'O': 'green',
-        'G': 'red',
-        'MIX': 'magenta'
-    }
-    
-    # Define color mapping for 3D crossplot at the top level
-    color_map_3d = {
-        0: 'gray',    # Undefined
-        1: 'blue',    # Brine
-        2: 'green',   # Oil
-        3: 'red',     # Gas
-        4: 'magenta', # Mixed
-        5: 'brown'    # Shale
-    }
-        # For example, in the create_interactive_3d_crossplot function call:
-
     # Sidebar for input parameters
     with st.sidebar:
         st.header("Model Configuration")
@@ -1000,6 +972,12 @@ def main():
                 mu_sh = st.number_input("Shale Shear Modulus (GPa)", value=5.0, step=0.1, key="mu_sh")
         
         # Additional parameters for selected models
+        critical_porosity = None
+        coordination_number = None
+        effective_pressure = None
+        lamination_factor = None
+        lithology_type = None
+        
         if model_choice == "Critical Porosity Model (Nur)":
             critical_porosity = st.slider("Critical Porosity (φc)", 0.3, 0.5, 0.4, 0.01, key="phi_c")
         elif model_choice in ["Contact Theory (Hertz-Mindlin)", "Dvorkin-Nur Soft Sand Model"]:
@@ -1013,6 +991,10 @@ def main():
             lithology_type = st.selectbox("Lithology Type", ['sandstone', 'shale', 'carbonate', 'dolomite'], key="lithology")
         
         # Rockphypy specific parameters
+        rpt_phi_c = None
+        rpt_Cn = None
+        rpt_sigma = None
+        
         if model_choice in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
             st.subheader("RPT Model Parameters")
             rpt_phi_c = st.slider("RPT Critical Porosity", 0.3, 0.5, 0.4, 0.01, key="rpt_phi_c")
@@ -1083,7 +1065,7 @@ def main():
         
         # Visualization options
         with st.expander("Visualization Options"):
-            selected_cmap = st.selectbox("Color Map", seismic_colormaps, index=0, key="colormap")
+            selected_cmap = st.selectbox("Color Map", SEISMIC_COLORMAPS, index=0, key="colormap")
             show_3d_crossplot = st.checkbox("Show 3D Crossplot", value=False, key="show_3d_crossplot")
             show_interactive_3d = st.checkbox("Show Interactive 3D Plot", value=True, key="show_interactive_3d")
             show_histograms = st.checkbox("Show Histograms", value=True, key="show_histograms")
@@ -1118,12 +1100,9 @@ def main():
     # Main processing
     if uploaded_file is not None:
         try:
-            # Store the original file object
-            original_file = uploaded_file
-            
             # Process data with selected model and saturations
             logs, mc_results = process_data(
-                original_file, 
+                uploaded_file, 
                 model_choice,
                 include_uncertainty=include_uncertainty,
                 mc_iterations=mc_iterations,
@@ -1133,12 +1112,12 @@ def main():
                 rho_o=rho_o, k_o=k_o,
                 rho_g=rho_g, k_g=k_g,
                 sand_cutoff=sand_cutoff,
-                sw=sw, so=so, sg=sg,  # Pass saturation values
-                critical_porosity=critical_porosity if 'critical_porosity' in locals() else None,
-                coordination_number=coordination_number if 'coordination_number' in locals() else None,
-                effective_pressure=effective_pressure if 'effective_pressure' in locals() else None,
-                lamination_factor=lamination_factor if 'lamination_factor' in locals() else None,
-                lithology_type=lithology_type if 'lithology_type' in locals() else None
+                sw=sw, so=so, sg=sg,
+                critical_porosity=critical_porosity,
+                coordination_number=coordination_number,
+                effective_pressure=effective_pressure,
+                lamination_factor=lamination_factor,
+                lithology_type=lithology_type
             )
             
             if logs is None:
@@ -1162,10 +1141,6 @@ def main():
                 "Rock Physics Templates"
             ])
             
-            # Visualization
-            ccc = ['#B3B3B3','blue','green','red','magenta','#996633']  # Added magenta for mixed case
-            cmap_facies = colors.ListedColormap(ccc[0:len(ccc)], 'indexed')
-
             # Create a filtered dataframe for the selected depth range
             ll = logs.loc[(logs.DEPTH>=ztop) & (logs.DEPTH<=zbot)]
             cluster = np.repeat(np.expand_dims(ll['LFC_B'].values,1), 100, 1)
@@ -1174,7 +1149,7 @@ def main():
                 # Only show well log visualization for non-RPT models
                 if model_choice not in ["Soft Sand RPT (rockphypy)", "Stiff Sand RPT (rockphypy)"]:
                     # Create the well log figure
-                    fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(12, 8))  # Added column for mixed case
+                    fig, ax = plt.subplots(nrows=1, ncols=4, figsize=(12, 8))
                     ax[0].plot(ll.VSH, ll.DEPTH, '-g', label='Vsh')
                     ax[0].plot(ll.SW, ll.DEPTH, '-b', label='Sw')
                     ax[0].plot(ll.PHI, ll.DEPTH, '-k', label='phi')
@@ -1186,7 +1161,7 @@ def main():
                     ax[2].plot(ll.VPVS_FRMB, ll.DEPTH, '-b', label='Brine')
                     ax[2].plot(ll.VPVS_FRMMIX, ll.DEPTH, '-m', label='Mixed')
                     ax[2].plot(ll.VPVS, ll.DEPTH, '-', color='0.5', label='Original')
-                    im = ax[3].imshow(cluster, interpolation='none', aspect='auto', cmap=cmap_facies, vmin=0, vmax=5)
+                    im = ax[3].imshow(cluster, interpolation='none', aspect='auto', cmap=CMAP_FACIES, vmin=0, vmax=5)
 
                     cbar = plt.colorbar(im, ax=ax[3])
                     cbar.set_label((12*' ').join(['undef', 'brine', 'oil', 'gas', 'mixed', 'shale']))
@@ -1363,24 +1338,24 @@ def main():
                 
                 # Original 2D crossplots (now including mixed case) with depth filtering
                 st.header("2D Crossplots")
-                fig2, ax2 = plt.subplots(1, 5, figsize=(25, 4))  # Added column for mixed case
+                fig2, ax2 = plt.subplots(1, 5, figsize=(25, 4))
                 
                 # Filter data based on depth range
                 filtered_logs = logs[(logs['DEPTH'] >= ztop) & (logs['DEPTH'] <= zbot)]
                 
-                ax2[0].scatter(filtered_logs.IP, filtered_logs.VPVS, 20, filtered_logs.LFC_B, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
+                ax2[0].scatter(filtered_logs.IP, filtered_logs.VPVS, 20, filtered_logs.LFC_B, marker='o', edgecolors='none', alpha=0.5, cmap=CMAP_FACIES, vmin=0, vmax=5)
                 ax2[0].set_xlabel('IP (m/s*g/cc)')
                 ax2[0].set_ylabel('Vp/Vs(unitless)')
-                ax2[1].scatter(filtered_logs.IP_FRMB, filtered_logs.VPVS_FRMB, 20, filtered_logs.LFC_B, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
+                ax2[1].scatter(filtered_logs.IP_FRMB, filtered_logs.VPVS_FRMB, 20, filtered_logs.LFC_B, marker='o', edgecolors='none', alpha=0.5, cmap=CMAP_FACIES, vmin=0, vmax=5)
                 ax2[1].set_xlabel('IP (m/s*g/cc)')
                 ax2[1].set_ylabel('Vp/Vs(unitless)')
-                ax2[2].scatter(filtered_logs.IP_FRMO, filtered_logs.VPVS_FRMO, 20, filtered_logs.LFC_O, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
+                ax2[2].scatter(filtered_logs.IP_FRMO, filtered_logs.VPVS_FRMO, 20, filtered_logs.LFC_O, marker='o', edgecolors='none', alpha=0.5, cmap=CMAP_FACIES, vmin=0, vmax=5)
                 ax2[2].set_xlabel('IP (m/s*g/cc)')
                 ax2[2].set_ylabel('Vp/Vs(unitless)')
-                ax2[3].scatter(filtered_logs.IP_FRMG, filtered_logs.VPVS_FRMG, 20, filtered_logs.LFC_G, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
+                ax2[3].scatter(filtered_logs.IP_FRMG, filtered_logs.VPVS_FRMG, 20, filtered_logs.LFC_G, marker='o', edgecolors='none', alpha=0.5, cmap=CMAP_FACIES, vmin=0, vmax=5)
                 ax2[3].set_xlabel('IP (m/s*g/cc)')
                 ax2[3].set_ylabel('Vp/Vs(unitless)')
-                ax2[4].scatter(filtered_logs.IP_FRMMIX, filtered_logs.VPVS_FRMMIX, 20, filtered_logs.LFC_MIX, marker='o', edgecolors='none', alpha=0.5, cmap=cmap_facies, vmin=0, vmax=5)
+                ax2[4].scatter(filtered_logs.IP_FRMMIX, filtered_logs.VPVS_FRMMIX, 20, filtered_logs.LFC_MIX, marker='o', edgecolors='none', alpha=0.5, cmap=CMAP_FACIES, vmin=0, vmax=5)
                 ax2[4].set_xlabel('IP (m/s*g/cc)')
                 ax2[4].set_ylabel('Vp/Vs(unitless)')
                 ax2[0].set_xlim(3000,16000); ax2[0].set_ylim(1.5,3)
@@ -1403,7 +1378,7 @@ def main():
                             filtered_logs.loc[mask, f'IP_FRM{case}'],
                             filtered_logs.loc[mask, f'VPVS_FRM{case}'],
                             filtered_logs.loc[mask, f'RHO_FRM{case}'],
-                            c=case_colors[case], label=case, alpha=0.5
+                            c=CASE_COLORS[case], label=case, alpha=0.5
                         )
                     
                     ax3d.set_xlabel('IP (m/s*g/cc)')
@@ -1418,25 +1393,25 @@ def main():
                     st.header("Property Distributions")
                     fig_hist, ax_hist = plt.subplots(2, 2, figsize=(12, 8))
                     
-                    ax_hist[0,0].hist(filtered_logs.IP_FRMB, bins=30, alpha=0.5, label='Brine', color=hist_colors['B'])
-                    ax_hist[0,0].hist(filtered_logs.IP_FRMO, bins=30, alpha=0.5, label='Oil', color=hist_colors['O'])
-                    ax_hist[0,0].hist(filtered_logs.IP_FRMG, bins=30, alpha=0.5, label='Gas', color=hist_colors['G'])
-                    ax_hist[0,0].hist(filtered_logs.IP_FRMMIX, bins=30, alpha=0.5, label='Mixed', color=hist_colors['MIX'])
+                    ax_hist[0,0].hist(filtered_logs.IP_FRMB, bins=30, alpha=0.5, label='Brine', color=HIST_COLORS['B'])
+                    ax_hist[0,0].hist(filtered_logs.IP_FRMO, bins=30, alpha=0.5, label='Oil', color=HIST_COLORS['O'])
+                    ax_hist[0,0].hist(filtered_logs.IP_FRMG, bins=30, alpha=0.5, label='Gas', color=HIST_COLORS['G'])
+                    ax_hist[0,0].hist(filtered_logs.IP_FRMMIX, bins=30, alpha=0.5, label='Mixed', color=HIST_COLORS['MIX'])
                     ax_hist[0,0].set_xlabel('IP (m/s*g/cc)')
                     ax_hist[0,0].set_ylabel('Frequency')
                     ax_hist[0,0].legend()
                     
-                    ax_hist[0,1].hist(filtered_logs.VPVS_FRMB, bins=30, alpha=0.5, label='Brine', color=hist_colors['B'])
-                    ax_hist[0,1].hist(filtered_logs.VPVS_FRMO, bins=30, alpha=0.5, label='Oil', color=hist_colors['O'])
-                    ax_hist[0,1].hist(filtered_logs.VPVS_FRMG, bins=30, alpha=0.5, label='Gas', color=hist_colors['G'])
-                    ax_hist[0,1].hist(filtered_logs.VPVS_FRMMIX, bins=30, alpha=0.5, label='Mixed', color=hist_colors['MIX'])
+                    ax_hist[0,1].hist(filtered_logs.VPVS_FRMB, bins=30, alpha=0.5, label='Brine', color=HIST_COLORS['B'])
+                    ax_hist[0,1].hist(filtered_logs.VPVS_FRMO, bins=30, alpha=0.5, label='Oil', color=HIST_COLORS['O'])
+                    ax_hist[0,1].hist(filtered_logs.VPVS_FRMG, bins=30, alpha=0.5, label='Gas', color=HIST_COLORS['G'])
+                    ax_hist[0,1].hist(filtered_logs.VPVS_FRMMIX, bins=30, alpha=0.5, label='Mixed', color=HIST_COLORS['MIX'])
                     ax_hist[0,1].set_xlabel('Vp/Vs')
                     ax_hist[0,1].legend()
                     
-                    ax_hist[1,0].hist(filtered_logs.RHO_FRMB, bins=30, color=hist_colors['B'], alpha=0.7)
-                    ax_hist[1,0].hist(filtered_logs.RHO_FRMO, bins=30, color=hist_colors['O'], alpha=0.7)
-                    ax_hist[1,0].hist(filtered_logs.RHO_FRMG, bins=30, color=hist_colors['G'], alpha=0.7)
-                    ax_hist[1,0].hist(filtered_logs.RHO_FRMMIX, bins=30, color=hist_colors['MIX'], alpha=0.7)
+                    ax_hist[1,0].hist(filtered_logs.RHO_FRMB, bins=30, color=HIST_COLORS['B'], alpha=0.7)
+                    ax_hist[1,0].hist(filtered_logs.RHO_FRMO, bins=30, color=HIST_COLORS['O'], alpha=0.7)
+                    ax_hist[1,0].hist(filtered_logs.RHO_FRMG, bins=30, color=HIST_COLORS['G'], alpha=0.7)
+                    ax_hist[1,0].hist(filtered_logs.RHO_FRMMIX, bins=30, color=HIST_COLORS['MIX'], alpha=0.7)
                     ax_hist[1,0].set_xlabel('Density (g/cc)')
                     ax_hist[1,0].set_ylabel('Frequency')
                     ax_hist[1,0].legend(['Brine', 'Oil', 'Gas', 'Mixed'])
@@ -1546,7 +1521,7 @@ def main():
                         
                         for idx, row in avo_df.iterrows():
                             ax_sg.scatter(row['Intercept'], row['Gradient'], 
-                                         color=case_colors[row['Case'][0]], s=100, label=row['Case'])
+                                         color=CASE_COLORS[row['Case'][0]], s=100, label=row['Case'])
                             ax_sg.text(row['Intercept'], row['Gradient'], row['Case'], 
                                       fontsize=9, ha='right', va='bottom')
                         
@@ -1570,7 +1545,7 @@ def main():
                         st.subheader("Fluid Factor Analysis")
                         fig_ff, ax_ff = plt.subplots(figsize=(8, 4))
                         ax_ff.bar(avo_df['Case'], avo_df['Fluid_Factor'], 
-                                 color=[case_colors[c[0]] for c in avo_df['Case']])
+                                 color=[CASE_COLORS[c[0]] for c in avo_df['Case']])
                         ax_ff.set_ylabel('Fluid Factor')
                         ax_ff.set_title('Fluid Factor by Fluid Type')
                         ax_ff.grid(True)
