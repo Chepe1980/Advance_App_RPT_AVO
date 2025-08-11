@@ -72,13 +72,6 @@ except ImportError:
 # Set page config
 st.set_page_config(layout="wide", page_title="Enhanced Rock Physics & AVO Modeling")
 
-# Title and description
-st.title("Enhanced Rock Physics & AVO Modeling Tool")
-st.markdown("""
-This app performs advanced rock physics modeling and AVO analysis with multiple models, 
-visualization options, uncertainty analysis, sonic log prediction, and seismic inversion feasibility assessment.
-""")
-
 # ==============================================
 # Data Models for Parameter Validation
 # ==============================================
@@ -320,7 +313,155 @@ def greenberg_castagna(vp: float, vs: float, rho: float, phi: float, sw: float,
     return vp, vs_corr, rho, None
 
 # ==============================================
-# Enhanced AVO and Seismic Modeling Functions
+# Data Processing Function
+# ==============================================
+
+@st.cache_data
+def process_data(uploaded_file, model_choice, include_uncertainty=False, mc_iterations=100,
+                rho_qz=2.65, k_qz=37.0, mu_qz=44.0, rho_sh=2.81, k_sh=15.0, mu_sh=5.0,
+                rho_b=1.09, k_b=2.8, rho_o=0.78, k_o=0.94, rho_g=0.25, k_g=0.06,
+                sand_cutoff=0.12, sw=0.8, so=0.15, sg=0.05,
+                critical_porosity=None, coordination_number=None, effective_pressure=None,
+                lamination_factor=None, lithology_type=None):
+    """Process uploaded well log data and apply selected rock physics model."""
+    try:
+        # Read the uploaded file
+        if uploaded_file.name.endswith('.las'):
+            las = lasio.read(uploaded_file)
+            logs = las.df()
+            logs['DEPTH'] = logs.index
+        else:  # CSV
+            logs = pd.read_csv(uploaded_file)
+        
+        # Validate required columns
+        required_cols = ['DEPTH', 'VP', 'VS', 'RHO', 'PHI', 'VSH']
+        missing_cols = [col for col in required_cols if col not in logs.columns]
+        if missing_cols:
+            st.error(f"Missing required columns: {', '.join(missing_cols)}")
+            return None, None
+        
+        # Calculate mixed fluid properties
+        rho_mix = sw * rho_b + so * rho_o + sg * rho_g
+        k_mix = (sw / k_b + so / k_o + sg / k_g) ** -1 if (sw + so + sg) > 0 else 0
+        
+        # Initialize results storage
+        mc_results = None
+        
+        # Select the appropriate model function
+        model_func = {
+            "Gassmann's Fluid Substitution": frm,
+            "Critical Porosity Model (Nur)": critical_porosity_model,
+            "Contact Theory (Hertz-Mindlin)": hertz_mindlin_model,
+            "Dvorkin-Nur Soft Sand Model": dvorkin_nur_model,
+            "Raymer-Hunt-Gardner Model": raymer_hunt_model,
+            "Xu-Payne Laminated Model": xu_payne_model,
+            "Greenberg-Castagna Empirical": greenberg_castagna
+        }.get(model_choice, frm)  # Default to Gassmann if not found
+        
+        # Prepare parameters for the model
+        model_params = {
+            'vp1': logs.VP.values,
+            'vs1': logs.VS.values,
+            'rho1': logs.RHO.values,
+            'rho_f1': rho_b,  # Original fluid is assumed to be brine
+            'k_f1': k_b,
+            'k0': k_qz,
+            'mu0': mu_qz,
+            'phi': logs.PHI.values
+        }
+        
+        # Add model-specific parameters
+        if model_choice == "Critical Porosity Model (Nur)":
+            model_params['phi_c'] = critical_porosity
+        elif model_choice in ["Contact Theory (Hertz-Mindlin)", "Dvorkin-Nur Soft Sand Model"]:
+            model_params['Cn'] = coordination_number
+            model_params['P'] = effective_pressure
+            if model_choice == "Dvorkin-Nur Soft Sand Model":
+                model_params['phi_c'] = critical_porosity
+        elif model_choice == "Xu-Payne Laminated Model":
+            model_params['vsh'] = logs.VSH.values
+            model_params['c'] = lamination_factor
+            model_params['k_sh'] = k_sh
+            model_params['mu_sh'] = mu_sh
+        elif model_choice == "Greenberg-Castagna Empirical":
+            model_params['sw'] = sw
+            model_params['lithology'] = lithology_type
+        
+        # Process each fluid case
+        fluid_cases = {
+            'FRMB': {'rho_f2': rho_b, 'k_f2': k_b},
+            'FRMO': {'rho_f2': rho_o, 'k_f2': k_o},
+            'FRMG': {'rho_f2': rho_g, 'k_f2': k_g},
+            'FRMMIX': {'rho_f2': rho_mix, 'k_f2': k_mix}
+        }
+        
+        for case, fluids in fluid_cases.items():
+            # Combine base params with fluid params
+            params = {**model_params, **fluids}
+            
+            # Apply the model
+            results = model_func(**params)
+            
+            # Store results (handle different return formats)
+            if len(results) == 4:  # Most models return (vp, vs, rho, k)
+                logs[f'VP_{case}'] = results[0]
+                logs[f'VS_{case}'] = results[1]
+                logs[f'RHO_{case}'] = results[2]
+            elif len(results) == 3:  # Some models don't return bulk modulus
+                logs[f'VP_{case}'] = results[0]
+                logs[f'VS_{case}'] = results[1]
+                logs[f'RHO_{case}'] = results[2]
+            
+            # Calculate derived properties
+            logs[f'IP_{case}'] = logs[f'VP_{case}'] * logs[f'RHO_{case}']
+            logs[f'VPVS_{case}'] = logs[f'VP_{case}'] / logs[f'VS_{case}']
+            
+            # Determine litho-fluid classes
+            if case == 'FRMB':
+                logs['LFC_B'] = np.where(logs.VSH < sand_cutoff, 1, 5)  # 1=brine sand, 5=shale
+            elif case == 'FRMO':
+                logs['LFC_O'] = np.where(logs.VSH < sand_cutoff, 2, 5)  # 2=oil sand, 5=shale
+            elif case == 'FRMG':
+                logs['LFC_G'] = np.where(logs.VSH < sand_cutoff, 3, 5)  # 3=gas sand, 5=shale
+            elif case == 'FRMMIX':
+                logs['LFC_MIX'] = np.where(logs.VSH < sand_cutoff, 4, 5)  # 4=mixed sand, 5=shale
+        
+        # Monte Carlo uncertainty analysis
+        if include_uncertainty:
+            st.info("Running Monte Carlo uncertainty analysis...")
+            mc_params = {
+                'vp1': (logs.VP.mean(), logs.VP.std()),
+                'vs1': (logs.VS.mean(), logs.VS.std()),
+                'rho1': (logs.RHO.mean(), logs.RHO.std()),
+                'rho_f1': (rho_b, rho_b_std),
+                'k_f1': (k_b, k_b_std),
+                'rho_f2': (rho_mix, np.sqrt((sw*rho_b_std)**2 + (so*rho_o_std)**2 + (sg*rho_g_std)**2)),
+                'k_f2': (k_mix, np.sqrt((sw*k_b_std)**2 + (so*k_o_std)**2 + (sg*k_g_std)**2)),
+                'k0': (k_qz, k_qz*0.05),  # 5% uncertainty
+                'mu0': (mu_qz, mu_qz*0.05),
+                'phi': (logs.PHI.mean(), logs.PHI.std())
+            }
+            
+            # Add model-specific parameter uncertainties
+            if model_choice == "Critical Porosity Model (Nur)":
+                mc_params['phi_c'] = (critical_porosity, critical_porosity*0.1)
+            elif model_choice in ["Contact Theory (Hertz-Mindlin)", "Dvorkin-Nur Soft Sand Model"]:
+                mc_params['Cn'] = (coordination_number, coordination_number*0.1)
+                mc_params['P'] = (effective_pressure, effective_pressure*0.1)
+                if model_choice == "Dvorkin-Nur Soft Sand Model":
+                    mc_params['phi_c'] = (critical_porosity, critical_porosity*0.1)
+            
+            mc_results = parallel_monte_carlo(logs, model_func, mc_params, mc_iterations)
+        
+        return logs, mc_results
+    
+    except Exception as e:
+        st.error(f"Error processing data: {str(e)}")
+        logger.error(f"Data processing error: {str(e)}")
+        return None, None
+
+# ==============================================
+# AVO and Seismic Modeling Functions
 # ==============================================
 
 @st.cache_data
@@ -378,7 +519,7 @@ def fit_avo_curve(angles: np.ndarray, rc_values: np.ndarray) -> Tuple[float, flo
         return np.nan, np.nan, (np.nan, np.nan)
 
 # ==============================================
-# Enhanced Helper Functions
+# Helper Functions
 # ==============================================
 
 @st.cache_data
@@ -746,7 +887,7 @@ def plot_rpt_with_gassmann(title: str, fluid: str = 'gas',
         st.error(f"Error generating RPT plot: {str(e)}")
 
 # ==============================================
-# Main Application with Enhanced Features
+# Main Application
 # ==============================================
 
 def main():
