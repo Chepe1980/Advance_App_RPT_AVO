@@ -843,13 +843,17 @@ def process_data(
 
                 # Create litho-fluid classes
             lfc_value = {'B': 1, 'O': 2, 'G': 3, 'MIX': 4}.get(case[-1], 0)
-            lfc_col_name = 'LFC_MIX' if case == 'FRMMIX' else f'LFC_{case[-1]}
+            lfc_col_name = 'LFC_MIX' if case == 'FRMMIX' else f'LFC_{case[-1]}'  # Added missing }
+    
             logs[lfc_col_name] = np.where(
-            
                 logs.VSH < sand_cutoff,
                 lfc_value,
                 5  # Shale
-            )
+           )
+
+
+
+
     
     # Ensure LFC_MIX is created for the mixed case
         if case == 'FRMMIX':
