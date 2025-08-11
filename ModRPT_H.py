@@ -937,7 +937,7 @@ def process_data(
 # ==============================================
 
 def main():
-    # Define color maps at the top level to avoid scope issues
+    # Define color maps at the top level of main() to ensure they're always available
     case_colors = {
         'B': 'blue',
         'O': 'green',
@@ -950,6 +950,16 @@ def main():
         'O': 'green',
         'G': 'red',
         'MIX': 'magenta'
+    }
+    
+    # Define color mapping for 3D crossplot at the top level
+    color_map_3d = {
+        0: 'gray',    # Undefined
+        1: 'blue',    # Brine
+        2: 'green',   # Oil
+        3: 'red',     # Gas
+        4: 'magenta', # Mixed
+        5: 'brown'    # Shale
     }
     
     # Sidebar for input parameters
