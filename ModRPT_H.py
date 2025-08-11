@@ -850,8 +850,8 @@ def process_data(
          )
     
     # Ensure LFC_MIX is created for the mixed case
-    if case == 'FRMMIX':
-        logs['LFC_MIX'] = logs['LFC_M']
+        if case == 'FRMMIX':
+            logs['LFC_MIX'] = logs['LFC_M']
 
 
             
