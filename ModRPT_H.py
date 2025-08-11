@@ -465,7 +465,7 @@ def create_interactive_crossplot(logs: pd.DataFrame, depth_range: Tuple[float, f
 def create_interactive_3d_crossplot(logs: pd.DataFrame, x_col: str = 'IP', y_col: str = 'VPVS',
                                    z_col: str = 'RHO', color_col: str = 'LFC_B') -> go.Figure:
     """Create interactive 3D crossplot with Plotly"""
-    # Define color mapping
+    # Define color mapping first
     color_map = {
         0: 'gray',    # Undefined
         1: 'blue',    # Brine
@@ -475,10 +475,9 @@ def create_interactive_3d_crossplot(logs: pd.DataFrame, x_col: str = 'IP', y_col
         5: 'brown'    # Shale
     }
     
-    # Create figure
+    # Rest of the function remains the same
     fig = go.Figure()
     
-    # Add scatter plot for each class
     for class_val, color in color_map.items():
         mask = logs[color_col] == class_val
         if mask.any():
@@ -501,7 +500,6 @@ def create_interactive_3d_crossplot(logs: pd.DataFrame, x_col: str = 'IP', y_col
                     "<extra></extra>"
             ))
     
-    # Update layout with valid scene properties
     fig.update_layout(
         scene=dict(
             xaxis_title=x_col,
