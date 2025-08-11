@@ -840,6 +840,20 @@ def process_data(
             vp_results = np.zeros(len(logs))
             vs_results = np.zeros(len(logs))
             rho_results = np.zeros(len(logs))
+
+                # Create litho-fluid classes
+            lfc_value = {'B': 1, 'O': 2, 'G': 3, 'MIX': 4}.get(case[-1], 0)
+            logs[f'LFC_{case[-1]}'] = np.where(
+            logs.VSH < sand_cutoff,
+            lfc_value,
+             5  # Shale
+         )
+    
+    # Ensure LFC_MIX is created for the mixed case
+    if case == 'FRMMIX':
+        logs['LFC_MIX'] = logs['LFC_M']
+
+
             
             # Process each row individually
             for i in range(len(logs)):
